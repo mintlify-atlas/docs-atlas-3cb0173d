@@ -5,7 +5,7 @@ description: 'Billboard entities for sprites, walls, doors, and elevators'
 
 ## Overview
 
-Billboards are entities that display 2D sprites in 3D space. They include simple billboards, walls with directional textures, doors with animations, and elevators for map transitions.
+Billboards are entities that display 2D sprites in 3D space. They include simple billboards, walls with directional textures, doors with animations, elevators for map transitions, and drops for item pickups.
 
 ## Function Reference
 
@@ -103,6 +103,30 @@ t_elevator *elevator_new(t_game *game, t_ftm_window *window, char identifier);
 
 <ResponseField name="return" type="t_elevator *">
   Pointer to the newly created elevator, or `NULL` on allocation failure
+</ResponseField>
+
+### drop_new()
+
+Creates a drop entity for item pickups.
+
+```c
+t_drop *drop_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  Pointer to the game instance
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  Pointer to the window instance
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Drop identifier for configuration lookup
+</ParamField>
+
+<ResponseField name="return" type="t_drop *">
+  Pointer to the newly created drop, or `NULL` on allocation failure
 </ResponseField>
 
 ## Structure Definitions
@@ -270,6 +294,41 @@ struct s_elevator
 
 <ResponseField name="map_path" type="char *">
   Path to the map file to load when activated
+</ResponseField>
+
+### s_drop
+
+Drop entity for item pickups in the game world.
+
+```c
+struct s_drop
+{
+    t_billboard billboard;
+    t_item      *item;
+    t_item      *prev_item;
+    bool        auto_use;
+    bool        auto_pickup;
+};
+```
+
+<ResponseField name="billboard" type="t_billboard">
+  Base billboard entity
+</ResponseField>
+
+<ResponseField name="item" type="t_item *">
+  Pointer to the item contained in this drop
+</ResponseField>
+
+<ResponseField name="prev_item" type="t_item *">
+  Previous item reference for state management
+</ResponseField>
+
+<ResponseField name="auto_use" type="bool">
+  Whether the item is automatically used when picked up
+</ResponseField>
+
+<ResponseField name="auto_pickup" type="bool">
+  Whether the item is automatically picked up when player is nearby
 </ResponseField>
 
 ## Constants
