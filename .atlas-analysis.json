@@ -1,0 +1,112 @@
+{
+  "projectType": "general",
+  "projectName": "Cub3D",
+  "projectDescription": "A raycasting-based 3D game engine inspired by Wolfenstein 3D, built in C with SDL2.",
+  "theme": "aspen",
+  "primaryColor": "#8B4513",
+  "lightColor": "#D2691E",
+  "darkColor": "#5C3317",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/raycasting",
+              "concepts/map-format",
+              "concepts/entities",
+              "concepts/game-engine"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/building",
+              "guides/creating-maps",
+              "guides/web-deployment",
+              "guides/controls"
+            ]
+          },
+          {
+            "group": "Technical Reference",
+            "pages": [
+              "reference/architecture",
+              "reference/configuration",
+              "reference/entities-api",
+              "reference/items-weapons"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core",
+            "pages": [
+              "api/game",
+              "api/map",
+              "api/entities"
+            ]
+          },
+          {
+            "group": "Rendering",
+            "pages": [
+              "api/camera",
+              "api/sprites",
+              "api/raycasting"
+            ]
+          },
+          {
+            "group": "Game Objects",
+            "pages": [
+              "api/player",
+              "api/characters",
+              "api/items",
+              "api/billboards"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Raycasting 3D rendering engine",
+    "Multi-threaded rendering with configurable camera threads",
+    "SDL2-based graphics and audio system",
+    "Custom map format (.cub) with entity system",
+    "Player and enemy AI with pathfinding",
+    "Weapon and collectible system",
+    "Door and elevator mechanics",
+    "Controller support (Xbox, PlayStation)",
+    "Web support via Emscripten/WebAssembly",
+    "Minimap and HUD system"
+  ],
+  "publicApiSurface": [
+    "game_new_e() - Create new game instance",
+    "parse_map_e() - Parse .cub map files",
+    "player_new() - Create player entity",
+    "character_new() - Create character entity",
+    "billboard_new() - Create billboard entity",
+    "wall_new() - Create wall entity",
+    "door_new_e() - Create door entity",
+    "elevator_new() - Create elevator entity",
+    "item_new() - Create item instance",
+    "weapon_new() - Create weapon instance",
+    "collectible_new() - Create collectible instance",
+    "drop_new() - Create drop entity",
+    "render_game() - Render game frame",
+    "sprite_new() - Create animated sprite",
+    "get_sprite_image() - Get current sprite frame",
+    "get_sprite3d_image() - Get 3D sprite from angle"
+  ]
+}
