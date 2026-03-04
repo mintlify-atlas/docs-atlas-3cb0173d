@@ -1,0 +1,244 @@
+---
+title: Raycasting
+description: Understanding the DDA raycasting algorithm and 3D rendering in Cub3D
+---
+
+## Overview
+
+Cub3D uses a **DDA (Digital Differential Analysis) raycasting algorithm** to create a 3D perspective from a 2D map. This technique, popularized by Wolfenstein 3D, casts rays from the player's position to determine what the player sees and renders walls at the correct height and distance.
+
+## How Raycasting Works
+
+Raycasting creates the illusion of 3D by:
+1. Casting one ray per screen column from the player's position
+2. Finding the first wall the ray intersects
+3. Calculating the distance to that wall
+4. Drawing a vertical line whose height is inversely proportional to the distance
+
+<Info>
+  The further away a wall is, the shorter the vertical line drawn on screen, creating depth perception.
+</Info>
+
+## Field of View (FOV)
+
+The field of view determines how wide the player's vision is.
+
+```c headers/cub3d.h
+// Player Config
+#define PLAYER_FOV 66.0
+```
+
+- **Default FOV**: 66 degrees
+- Wider FOV = more peripheral vision but potential fisheye distortion
+- Narrower FOV = more focused but tunnel vision effect
+
+The FOV is used to calculate the angle for each ray:
+
+```c src/utils/render/camera/walls/render.c
+static double	get_ray_yaw(t_draw_ray_config drc)
+{
+	double	half_rays;
+	double	dist_to_proj;
+	double	angle_ajustment;
+
+	half_rays = drc.camera->rays / 2;
+	dist_to_proj = half_rays / tan(ft_radians(drc.camera->fov) / 2);
+	angle_ajustment = ft_degrees(atan(((double)drc.i - half_rays)
+				/ dist_to_proj));
+	return (ft_normalize_angle(
+			drc.camera->character->billboard.entity.coords.yaw
+			+ angle_ajustment));
+}
+```
+
+## Ray Configuration
+
+```c headers/cub3d.h
+#define PLAYER_RAYS_NO_HIT_LENGTH 50.0
+#define PLAYER_RAY_SUBRAYS 5
+#define FT_MAX_RAY_LENGTH 150.0
+```
+
+- **PLAYER_RAYS_NO_HIT_LENGTH**: Maximum distance for rays that don't hit anything (50.0 units)
+- **PLAYER_RAY_SUBRAYS**: Number of sub-rays for more accurate hit detection (5)
+- **FT_MAX_RAY_LENGTH**: Absolute maximum ray length (150.0 units)
+
+## The DDA Algorithm
+
+The DDA algorithm efficiently finds grid intersections by stepping through the map one grid cell at a time.
+
+### Ray Initialization
+
+```c src/ft_utils/utils19.c
+static void	init_ray(t_dda_raycast_data *ray, t_dda_raycast_config ddarc)
+{
+	ray->objs = ddarc.objs;
+	ray->objs_size = ddarc.objs_size;
+	ray->sp = ddarc.start_pos;
+	ray->ignored_obj = ddarc.ignored_obj;
+	ray->rdir.x = ft_cos_degrees(ddarc.start_pos.yaw);
+	ray->rdir.y = ft_sin_degrees(ddarc.start_pos.yaw);
+	ray->pos.x = (int)ddarc.start_pos.x;
+	ray->pos.y = (int)ddarc.start_pos.y;
+	ray->deltadist.x = ft_ternary_double(fabs(ray->rdir.x) < FT_EPSILON,
+			FT_MAX_RAY_LENGTH, fabs(1.0 / ray->rdir.x));
+	ray->deltadist.y = ft_ternary_double(fabs(ray->rdir.y) < FT_EPSILON,
+			FT_MAX_RAY_LENGTH, fabs(1.0 / ray->rdir.y));
+	ray->step.x = ft_ternary_double(ray->rdir.x < 0, -1, 1);
+	ray->step.y = ft_ternary_double(ray->rdir.y < 0, -1, 1);
+}
+```
+
+### DDA Core Loop
+
+The algorithm steps through grid cells, always moving to the nearest grid line:
+
+```c src/ft_utils/utils19.c
+static void	*perform_dda_algorithm(t_dda_raycast_data *ray)
+{
+	void	*hit;
+
+	while (true)
+	{
+		ray->side = ray->side_dist.x >= ray->side_dist.y;
+		if (ray->side_dist.x < ray->side_dist.y)
+		{
+			ray->side_dist.x += ray->deltadist.x;
+			ray->pos.x += ray->step.x;
+		}
+		else
+		{
+			ray->side_dist.y += ray->deltadist.y;
+			ray->pos.y += ray->step.y;
+		}
+		if (ray->side_dist.x >= FT_MAX_RAY_LENGTH
+			&& ray->side_dist.y >= FT_MAX_RAY_LENGTH)
+			return (NULL);
+		if ((int)ray->pos.x < 0 || (int)ray->pos.x >= ray->objs_size.width
+			|| (int)ray->pos.y < 0 || (int)ray->pos.y >= ray->objs_size.height)
+			continue ;
+		hit = ray->objs[(int)ray->pos.y][(int)ray->pos.x];
+		if (hit && hit != ray->ignored_obj)
+			return (hit);
+	}
+}
+```
+
+<Note>
+  The algorithm always steps in the direction that brings the ray to the nearest grid line, ensuring all grid cells along the ray path are checked.
+</Note>
+
+## Ray Data Structures
+
+### Raycast Configuration
+
+```c headers/ft_utils.h
+typedef struct s_dda_raycast_config
+{
+	void		***objs;        // 2D grid of entities
+	t_size		objs_size;      // Map dimensions
+	t_coords	start_pos;      // Starting position and angle
+	void		*ignored_obj;   // Entity to ignore (usually the caster)
+}	t_dda_raycast_config;
+```
+
+### Raycast Result
+
+```c headers/ft_utils.h
+typedef struct s_raycast
+{
+	double		distance;      // Distance to hit
+	double		yaw;           // Ray angle
+	void		*hit;          // Hit entity pointer
+	double		hit_x;         // X position on the hit surface (0.0-1.0)
+	t_direction	hit_direction; // Which side was hit (N/S/E/W)
+	t_coords	hit_coords;    // Grid coordinates of hit
+}	t_raycast;
+```
+
+## Fisheye Correction
+
+To prevent the fisheye effect, distances are corrected using the cosine of the angle difference:
+
+```c src/utils/render/camera/walls/draw.c
+ray_size.height = canvas->size.height / (fmax(ray.distance, 0.1)
+		* ft_cos_degrees((ray.yaw
+				- camera->character->billboard.entity.coords.yaw)));
+```
+
+This ensures that walls appear straight rather than curved.
+
+## Transparency and Multiple Hits
+
+Cub3D supports transparent entities (like doors and windows) by casting rays through transparent surfaces:
+
+```c src/utils/render/camera/walls/render.c
+if (((t_entity *)ray.hit)->ultra_mega_transparent
+	|| (((t_entity *)ray.hit)->transparent
+		&& entity_x_is_transparent(ray.hit, ray.hit_direction, ray.hit_x)))
+{
+	drc.coords = get_coords(&ray);
+	drc.ignored_entity = ray.hit;
+	drc.previous_distance = ray.distance;
+	draw_ray(drc);  // Recursive call to continue the ray
+}
+```
+
+<Accordion title="Transparency Flags">
+  - **transparent**: Entity can be partially transparent based on texture
+  - **ultra_mega_transparent**: Entity is always transparent (like thin walls)
+  - **no_transparency_for_bill**: Blocks billboards but not rays
+</Accordion>
+
+## Multi-Threading
+
+Raycasting is parallelized across multiple threads for better performance:
+
+```c headers/cub3d.h
+#define CAMERA_THREADS 4
+```
+
+Each thread renders a portion of the screen rays:
+
+```c src/utils/render/camera/walls/render.c
+void	render_walls(t_game *game, t_ftm_image *canvas, t_camera *camera)
+{
+	t_thread_render_rays_data			trrd[CAMERA_THREADS];
+	unsigned int						index_scaler;
+
+	index_scaler = (camera->rays / CAMERA_THREADS);
+	while (++i < CAMERA_THREADS)
+	{
+		trrd[i].start = index_scaler * i;
+		trrd[i].end = index_scaler * (i + 1);
+		game->camera_threads[i]->routine = thread_render_rays;
+		ftt_thread_run(game->camera_threads[i]);
+	}
+	// Wait for all threads to complete
+	while (++i < CAMERA_THREADS)
+		ftt_thread_wait(game->camera_threads[i]);
+}
+```
+
+<Info>
+  With 4 threads, each thread renders 1/4 of the screen rays, significantly improving frame rates.
+</Info>
+
+## Ray Distance Storage
+
+Ray distances are stored for billboard rendering:
+
+```c src/utils/render/camera/camera.c
+t_camera	camera;
+
+camera = (t_camera){character, character->fov, character->rays,
+	ft_calloc(character->rays, sizeof(double))};
+```
+
+Billboards use these distances to determine if they should be drawn in front of or behind walls.
+
+## Related Topics
+
+- [Game Engine](/concepts/game-engine) - Learn about the rendering loop
+- [Entities](/concepts/entities) - Understanding walls, doors, and billboards
+- [Map Format](/concepts/map-format) - How maps define wall positions

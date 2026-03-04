@@ -1,0 +1,393 @@
+---
+title: Map Format
+description: Complete guide to the .cub map file format with real examples
+---
+
+## Overview
+
+Cub3D uses `.cub` files to define game maps. These files contain texture paths, colors, entity definitions, and the map grid layout.
+
+<Info>
+  Map files must have the `.cub` extension and be valid ASCII text files.
+</Info>
+
+## File Structure
+
+A `.cub` file consists of three main sections:
+1. **Sprite and Resource Definitions** - Textures, sounds, and assets
+2. **Environment Configuration** - Floor and ceiling colors
+3. **Map Grid** - The actual level layout using identifiers
+
+## Basic Example
+
+Here's a minimal map file:
+
+```text maps/smol.cub
+NO assets/wolf3d/textures/grey-wall0.bmp
+SO assets/wolf3d/textures/purple-wall.bmp
+WE assets/wolf3d/textures/red-wall.bmp
+EA assets/wolf3d/textures/wood-wall.bmp
+
+F 50,50,50
+C 225,30,0
+
+111111
+1E00W1
+100001
+1E00W1
+111111
+```
+
+This creates a small room with:
+- `1` = walls with default textures (NO/SO/WE/EA)
+- `0` = empty space (air)
+- `E` and `W` = enemy/character spawn points
+
+## Default Map Configuration
+
+```c headers/cub3d.h
+#define DEFAULT_MAP_PATH "maps/hub.cub"
+#define DEFAULT_AIR_TYPES "0 \t\n\v\f\r"
+#define DEFAULT_WALL_TYPES "1"
+#define DEFAULT_PLAYER_TYPES "NSEW"
+```
+
+- **Air characters**: `0` and whitespace characters
+- **Wall character**: `1`
+- **Player spawn**: `N` (north), `S` (south), `E` (east), `W` (west) - indicates starting direction
+
+## Environment Configuration
+
+### Floor and Ceiling Colors
+
+```text
+F 50,50,50     # Floor color (RGB)
+C 140,140,140  # Ceiling color (RGB)
+```
+
+- Format: `R,G,B` where each value is 0-255
+- Must be defined before the map grid
+
+## Default Wall Textures
+
+The four cardinal directions define default wall textures:
+
+```text
+NO assets/path/to/north-texture.bmp
+SO assets/path/to/south-texture.bmp
+WE assets/path/to/west-texture.bmp
+EA assets/path/to/east-texture.bmp
+```
+
+These textures are applied to walls (`1` character) based on which side is visible.
+
+## Custom Entity Definitions
+
+Cub3D supports extensive customization through identifier-based entity definitions. Each entity type (wall, door, billboard, character, etc.) can have custom properties.
+
+### Identifier Pattern
+
+```text
+<identifier>_<PROPERTY> <value>
+```
+
+- **identifier**: Single character (a-z, A-Z)
+- **PROPERTY**: Configuration key in UPPER_CASE
+- **value**: The property value
+
+## Entity Types
+
+### Wall Entity
+
+```text maps/42lisboa.cub
+a_TYPE WALL
+a_NO assets/42lisboa/cluster2-wall.bmp
+a_SO assets/42lisboa/cluster2-left.bmp
+a_EA assets/42lisboa/cluster2-wall.bmp
+a_WE assets/42lisboa/cluster2-wall.bmp
+```
+
+<Accordion title="Wall Properties">
+  - `TYPE`: Must be "WALL"
+  - `NO`, `SO`, `EA`, `WE`: Texture for each cardinal direction
+  - `HARD`: Whether the wall blocks movement (default: true)
+  - `TARGETABLE`: Can be targeted/interacted with (default: false)
+  - `TRANSPARENT`: See-through texture support (default: false)
+  - `ULTRA_MEGA_TRANSPARENT`: Always transparent (default: false)
+  - `NO_TRANSPARENCY_FOR_BILL`: Blocks billboards but not rays (default: false)
+</Accordion>
+
+### Door Entity
+
+```text maps/42lisboa.cub
+h_TYPE DOOR
+h_TARGETABLE TRUE
+h_ANIMATION_DELAY 1.3
+h_DOOR_SPRITE assets/42lisboa/cluster2-door.bmp
+h_DIRECTION NORTH
+h_OPEN_SOUND assets/42lisboa/cluster2-door-open.mp3
+h_OPEN_SOUND_VOLUME 0.8
+h_CLOSE_SOUND assets/42lisboa/cluster2-door-close.mp3
+h_CLOSE_SOUND_VOLUME 0.8
+```
+
+<Accordion title="Door Properties">
+  - `TYPE`: Must be "DOOR"
+  - `DOOR_SPRITE`: Closed door texture
+  - `DIRECTION`: Which way the door faces (NORTH/SOUTH/EAST/WEST)
+  - `ANIMATION_DELAY`: Time for door animation in seconds
+  - `OPEN_SOUND`: Sound when door opens
+  - `CLOSE_SOUND`: Sound when door closes
+  - `TARGETABLE`: Can be interacted with
+  - `AUTO_CLOSE_DELAY`: Time before auto-closing (optional)
+</Accordion>
+
+### Billboard Entity
+
+Billboards are sprite objects that always face the camera:
+
+```text maps/42lisboa.cub
+c_TYPE BILLBOARD
+c_HARD FALSE
+c_STILL_3_SPRITE assets/42lisboa/pc-table-3.bmp
+c_STILL_2_SPRITE assets/42lisboa/pc-table-2.bmp
+c_STILL_1_SPRITE assets/42lisboa/pc-table-1.bmp
+```
+
+<Accordion title="Billboard Properties">
+  - `TYPE`: Must be "BILLBOARD"
+  - `HARD`: Whether it blocks movement (FALSE = can walk through)
+  - `STILL_<N>_SPRITE`: Directional sprites (1-8 for 8 directions)
+  - `Y_CENTERED`: Vertical centering (default: false)
+  - `TARGETABLE`: Can be interacted with
+</Accordion>
+
+### Multi-Directional Billboards
+
+Billboards support 8-directional sprites for different viewing angles:
+
+```text maps/42lisboa.cub
+J_TYPE BILLBOARD
+J_HARD TRUE
+J_STILL_1_SPRITE assets/42lisboa/lounge-yellow-sofa-back-left.bmp
+J_STILL_2_SPRITE assets/42lisboa/lounge-yellow-sofa-left.bmp
+J_STILL_3_SPRITE assets/42lisboa/lounge-yellow-sofa-front-right.bmp
+J_STILL_4_SPRITE assets/42lisboa/lounge-yellow-sofa-front.bmp
+J_STILL_5_SPRITE assets/42lisboa/lounge-yellow-sofa-front-left.bmp
+J_STILL_6_SPRITE assets/42lisboa/lounge-yellow-sofa-right.bmp
+J_STILL_7_SPRITE assets/42lisboa/lounge-yellow-sofa-back-right.bmp
+J_STILL_8_SPRITE assets/42lisboa/lounge-yellow-sofa-back.bmp
+```
+
+<Info>
+  The engine automatically selects the appropriate sprite based on the player's viewing angle relative to the billboard.
+</Info>
+
+### Character Entity
+
+Characters can be enemies, NPCs, or other players:
+
+```text maps/42lisboa.cub
+STILL_8_SPRITE assets/textures/billboards/afonsomaria/still-front.bmp
+WALKING_8_SPRITE assets/textures/billboards/afonsomaria/front1.bmp:assets/textures/billboards/afonsomaria/front2.bmp
+WALKING_8_SPRITE_UPDATE_DELAY 0.2
+WALKING_8_SPRITE_LOOP TRUE
+DEATH_SPRITE assets/textures/billboards/afonsomaria/dead.bmp
+DEATH_SPRITE_UPDATE_DELAY 0.1
+HIT_SPRITE assets/textures/billboards/afonsomaria/hit.bmp
+DEATH_SOUND assets/wolf3d/sounds/deathscream1.mp3
+USING_P_8_SPRITE assets/textures/billboards/afonsomaria/shoot-front.bmp
+USING_P_8_SPRITE_UPDATE_DELAY 0.05
+```
+
+<Accordion title="Character Properties">
+  - `STILL_<N>_SPRITE`: Idle animation sprites for 8 directions
+  - `WALKING_<N>_SPRITE`: Walking animation (can be colon-separated list)
+  - `DEATH_SPRITE`: Death animation
+  - `HIT_SPRITE`: Damage taken sprite
+  - `USING_<ITEM>_<N>_SPRITE`: Using item animation (P=pistol, M=machinegun, K=knife)
+  - `<SPRITE>_UPDATE_DELAY`: Animation frame delay in seconds
+  - `<SPRITE>_LOOP`: Whether animation loops
+  - `DEATH_SOUND`: Sound on death (can be colon-separated list for random)
+  - `HIT_SOUND`: Sound when taking damage
+</Accordion>
+
+### Elevator Entity
+
+```text maps/42lisboa.cub
+e_TYPE ELEVATOR
+e_MAP_PATH maps/other-level.cub
+e_NO assets/elevator-texture.bmp
+```
+
+Elevators teleport players to different maps when activated.
+
+## Sprite Animations
+
+Sprites can be animated by providing multiple images:
+
+```text
+WALKING_8_SPRITE image1.bmp:image2.bmp:image3.bmp:image4.bmp
+WALKING_8_SPRITE_UPDATE_DELAY 0.2
+WALKING_8_SPRITE_LOOP TRUE
+```
+
+- **Colon-separated paths**: Multiple frames
+- **UPDATE_DELAY**: Time between frames (seconds)
+- **LOOP**: Whether to repeat animation
+
+## Background and Audio
+
+```text maps/42lisboa.cub
+BACKGROUND_SPRITE assets/42lisboa/424242.bmp
+```
+
+Background sprite is displayed behind all game elements (skybox).
+
+## Map Grid
+
+The map grid is defined using the configured identifiers:
+
+```text maps/42lisboa.cub
+  11111111
+  gE    wg
+  g   JJ g
+  g   JK g
+  g   KJ g
+  g   JK g
+  g      g
+gggHG DC g
+g   1 zA g
+g   F  W g
+g   s OOOg
+```
+
+<Note>
+  - Each character represents a 1x1 grid cell
+  - Spaces and `0` represent empty/walkable areas
+  - Map boundaries should be enclosed by walls to prevent out-of-bounds issues
+  - Player spawn points use `N`, `S`, `E`, `W` to indicate starting direction
+</Note>
+
+## Map Grid Rules
+
+1. **Valid characters**: 
+   - Any identifier defined in the file
+   - Air characters: `0` and whitespace
+   - Player spawns: `N`, `S`, `E`, `W`
+
+2. **Map boundaries**:
+   - Must be enclosed by solid walls
+   - Prevents players from accessing out-of-bounds areas
+
+3. **Player spawns**:
+   - At least one required (`N`, `S`, `E`, or `W`)
+   - Letter indicates starting facing direction
+
+## Complete Example: 42 Lisboa Map
+
+Here's a section from the full 42 Lisboa campus map:
+
+```text maps/42lisboa.cub
+BACKGROUND_SPRITE assets/42lisboa/424242.bmp
+
+# Default wall textures
+NO assets/42lisboa/cluster2-wall.bmp
+SO assets/42lisboa/cluster2-wall.bmp
+WE assets/42lisboa/cluster2-wall.bmp
+EA assets/42lisboa/cluster2-wall.bmp
+
+# Window wall
+g_TYPE WALL
+g_NO assets/42lisboa/window.bmp
+g_SO assets/42lisboa/window.bmp
+g_EA assets/42lisboa/window.bmp
+g_WE assets/42lisboa/window.bmp
+
+# Door
+h_TYPE DOOR
+h_TARGETABLE TRUE
+h_ANIMATION_DELAY 1.3
+h_DOOR_SPRITE assets/42lisboa/cluster2-door.bmp
+h_DIRECTION NORTH
+h_OPEN_SOUND assets/42lisboa/cluster2-door-open.mp3
+
+# PC Table Billboard
+c_TYPE BILLBOARD
+c_HARD FALSE
+c_STILL_3_SPRITE assets/42lisboa/pc-table-3.bmp
+c_STILL_2_SPRITE assets/42lisboa/pc-table-2.bmp
+c_STILL_1_SPRITE assets/42lisboa/pc-table-1.bmp
+
+# Bookshelf
+x_TYPE BILLBOARD
+x_HARD TRUE
+x_STILL_SPRITE assets/42lisboa/bookshelf.bmp
+
+# Environment
+F 50,50,50
+C 140,140,140
+
+# Map Grid
+  11111111
+  gE    wg
+  g   JJ g
+  g   JK g
+  g      g
+gggHG DC g
+g   1    g
+  11111111
+```
+
+## Map Parsing
+
+Maps are parsed in three stages:
+
+```c src/utils/map/map1.c
+t_map	*parse_map_e(char *path)
+{
+	t_map	*map;
+
+	map = ft_calloc(1, sizeof(t_map));
+	map->path = ft_strdup(path);
+	if (!ft_str_endswith(map->path, ".cub"))
+		return (fte_set("invalid map"), NULL);
+	read_map_raw_lines_e(map);      // 1. Read file
+	process_raw_map_e(map);          // 2. Process identifiers
+	parse_identifiers_e(map);        // 3. Parse entity definitions
+	set_map_size(map);
+	return (map);
+}
+```
+
+## Map Data Structure
+
+```c headers/cub3d.h
+struct s_map
+{
+	char			*path;           // Map file path
+	t_hashmap		*types;          // Entity type creators
+	char			**raw;           // Raw file lines
+	char			**map;           // Processed map grid
+	t_size			size;            // Map dimensions
+	t_hashmap		*identifiers;    // Identifier configurations
+};
+```
+
+## Best Practices
+
+<Accordion title="Map Design Tips">
+  1. **Always enclose maps with walls** - Prevents out-of-bounds access
+  2. **Use descriptive identifiers** - Makes large maps easier to maintain
+  3. **Group related definitions** - Keep wall definitions together, billboards together, etc.
+  4. **Test spawn points** - Ensure players don't spawn inside walls
+  5. **Use consistent naming** - Prefix identifiers by type (w_wall1, d_door1, etc.)
+  6. **Optimize textures** - Reuse textures where possible
+  7. **Consider performance** - Very large maps may impact frame rates
+</Accordion>
+
+## Related Topics
+
+- [Entities](/concepts/entities) - Detailed information about entity types
+- [Raycasting](/concepts/raycasting) - How the map is rendered
+- [Game Engine](/concepts/game-engine) - Map loading and management

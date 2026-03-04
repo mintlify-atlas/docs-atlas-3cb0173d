@@ -1,0 +1,462 @@
+---
+title: 'Billboards'
+description: 'Billboard entities for sprites, walls, doors, and elevators'
+---
+
+## Overview
+
+Billboards are entities that display 2D sprites in 3D space. They include simple billboards, walls with directional textures, doors with animations, and elevators for map transitions.
+
+## Function Reference
+
+### billboard_new()
+
+Creates a basic billboard entity.
+
+```c
+t_billboard *billboard_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  Pointer to the game instance
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  Pointer to the window instance
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Billboard identifier for configuration lookup
+</ParamField>
+
+<ResponseField name="return" type="t_billboard *">
+  Pointer to the newly created billboard, or `NULL` on allocation failure
+</ResponseField>
+
+### wall_new()
+
+Creates a wall entity with directional textures.
+
+```c
+t_wall *wall_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  Pointer to the game instance
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  Pointer to the window instance
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Wall identifier (use `'1'` for default walls)
+</ParamField>
+
+<ResponseField name="return" type="t_wall *">
+  Pointer to the newly created wall, or `NULL` on allocation failure
+</ResponseField>
+
+### door_new_e()
+
+Creates a door entity with opening/closing animations.
+
+```c
+t_door *door_new_e(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  Pointer to the game instance
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  Pointer to the window instance
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Door identifier for configuration lookup
+</ParamField>
+
+<ResponseField name="return" type="t_door *">
+  Pointer to the newly created door, or `NULL` on error. Returns `NULL` if required configuration (direction, sprites) is missing
+</ResponseField>
+
+### elevator_new()
+
+Creates an elevator entity for map transitions.
+
+```c
+t_elevator *elevator_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  Pointer to the game instance
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  Pointer to the window instance
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Elevator identifier for configuration lookup
+</ParamField>
+
+<ResponseField name="return" type="t_elevator *">
+  Pointer to the newly created elevator, or `NULL` on allocation failure
+</ResponseField>
+
+## Structure Definitions
+
+### s_billboard
+
+Basic billboard entity for displaying sprites in 3D space.
+
+```c
+struct s_billboard
+{
+    t_entity        entity;
+    bool            y_centered;
+    t_sprite        **sprites;
+};
+```
+
+<ResponseField name="entity" type="t_entity">
+  Base entity structure
+</ResponseField>
+
+<ResponseField name="y_centered" type="bool">
+  If true, sprite is vertically centered. If false, sprite is floor-aligned
+</ResponseField>
+
+<ResponseField name="sprites" type="t_sprite **">
+  360-degree sprite array for omnidirectional viewing
+</ResponseField>
+
+### s_wall
+
+Wall entity with directional textures.
+
+```c
+struct s_wall
+{
+    t_entity    entity;
+    t_sprite    *north_sprite;
+    t_sprite    *south_sprite;
+    t_sprite    *west_sprite;
+    t_sprite    *east_sprite;
+};
+```
+
+<ResponseField name="entity" type="t_entity">
+  Base entity structure
+</ResponseField>
+
+<ResponseField name="north_sprite" type="t_sprite *">
+  Texture for north-facing wall surface
+</ResponseField>
+
+<ResponseField name="south_sprite" type="t_sprite *">
+  Texture for south-facing wall surface
+</ResponseField>
+
+<ResponseField name="west_sprite" type="t_sprite *">
+  Texture for west-facing wall surface
+</ResponseField>
+
+<ResponseField name="east_sprite" type="t_sprite *">
+  Texture for east-facing wall surface
+</ResponseField>
+
+### s_door
+
+Door entity with animation and auto-close functionality.
+
+```c
+struct s_door
+{
+    t_wall          wall;
+    t_direction     direction;
+    t_sprite        *opening_sprite;
+    t_sprite        *door_sprite;
+    t_sprite        *door_sides_sprite;
+    bool            opened;
+    bool            cant_close;
+    t_time          auto_close_delay;
+    t_time          last_opened_at;
+    int             last_animation_index;
+    bool            closeable;
+    t_time          animation_delay;
+    int             animation_frames;
+    t_fta_audio     *open_sound;
+    t_fta_audio     *close_sound;
+};
+```
+
+<ResponseField name="wall" type="t_wall">
+  Base wall structure
+</ResponseField>
+
+<ResponseField name="direction" type="t_direction">
+  Door orientation (NORTH, SOUTH, EAST, WEST)
+</ResponseField>
+
+<ResponseField name="opening_sprite" type="t_sprite *">
+  Animated sprite for opening/closing
+</ResponseField>
+
+<ResponseField name="door_sprite" type="t_sprite *">
+  Source sprite for animation frames
+</ResponseField>
+
+<ResponseField name="door_sides_sprite" type="t_sprite *">
+  Sprite for door edges/sides
+</ResponseField>
+
+<ResponseField name="opened" type="bool">
+  Current open/closed state
+</ResponseField>
+
+<ResponseField name="cant_close" type="bool">
+  Prevents closing if true
+</ResponseField>
+
+<ResponseField name="auto_close_delay" type="t_time">
+  Delay before automatic closing (0 = manual close only)
+</ResponseField>
+
+<ResponseField name="last_opened_at" type="t_time">
+  Timestamp when door was last opened
+</ResponseField>
+
+<ResponseField name="last_animation_index" type="int">
+  Current frame of animation
+</ResponseField>
+
+<ResponseField name="closeable" type="bool">
+  Whether door can be closed manually
+</ResponseField>
+
+<ResponseField name="animation_delay" type="t_time">
+  Duration of animation in milliseconds
+</ResponseField>
+
+<ResponseField name="animation_frames" type="int">
+  Number of animation frames (calculated from delay and FPS)
+</ResponseField>
+
+<ResponseField name="open_sound" type="t_fta_audio *">
+  Sound played when door opens
+</ResponseField>
+
+<ResponseField name="close_sound" type="t_fta_audio *">
+  Sound played when door closes
+</ResponseField>
+
+### s_elevator
+
+Elevator entity for transitioning between maps.
+
+```c
+struct s_elevator
+{
+    t_wall      wall;
+    char        *map_path;
+};
+```
+
+<ResponseField name="wall" type="t_wall">
+  Base wall structure
+</ResponseField>
+
+<ResponseField name="map_path" type="char *">
+  Path to the map file to load when activated
+</ResponseField>
+
+## Constants
+
+```c
+#define BILLBOARD_WIDTH 0.23
+#define BILLBOARD_HEIGHT 0.23
+#define WALL_INTERACTION_DISTANCE 2.0
+#define DOOR_ANIMATION_FPS 6
+```
+
+<ParamField path="BILLBOARD_WIDTH" type="double">
+  Default billboard collision width
+</ParamField>
+
+<ParamField path="BILLBOARD_HEIGHT" type="double">
+  Default billboard collision height
+</ParamField>
+
+<ParamField path="WALL_INTERACTION_DISTANCE" type="double">
+  Maximum distance for wall interaction
+</ParamField>
+
+<ParamField path="DOOR_ANIMATION_FPS" type="int">
+  Animation frames per second for door opening
+</ParamField>
+
+## Map Type Configuration
+
+### Billboard Configuration
+
+```
+T_STILL assets/sprites/tree
+T_Y_CENTERED TRUE
+T_TARGETABLE FALSE
+T_TRANSPARENT TRUE
+```
+
+<ParamField path="STILL" type="string">
+  Path to 360-degree sprite assets for idle state
+</ParamField>
+
+<ParamField path="Y_CENTERED" type="string">
+  `"TRUE"` for vertical centering, `"FALSE"` for floor alignment
+</ParamField>
+
+<ParamField path="TARGETABLE" type="string">
+  `"TRUE"` if entity can be targeted by weapons/AI
+</ParamField>
+
+<ParamField path="TRANSPARENT" type="string">
+  `"TRUE"` to enable transparency rendering
+</ParamField>
+
+### Wall Configuration
+
+```
+1_NO assets/textures/wall_north.bmp
+1_SO assets/textures/wall_south.bmp
+1_WE assets/textures/wall_west.bmp
+1_EA assets/textures/wall_east.bmp
+```
+
+<ParamField path="NO" type="string">
+  North-facing wall texture
+</ParamField>
+
+<ParamField path="SO" type="string">
+  South-facing wall texture
+</ParamField>
+
+<ParamField path="WE" type="string">
+  West-facing wall texture
+</ParamField>
+
+<ParamField path="EA" type="string">
+  East-facing wall texture
+</ParamField>
+
+Note: Use identifier `'1'` for standard walls, or custom identifiers for special walls.
+
+### Door Configuration
+
+```
+D_DIRECTION NORTH
+D_DOOR assets/sprites/door.bmp
+D_SIDES assets/sprites/door_sides.bmp
+D_AUTO_CLOSE_DELAY 3.0
+D_CLOSEABLE TRUE
+D_ANIMATION_DELAY 0.5
+D_OPEN assets/sounds/door_open.wav
+D_CLOSE assets/sounds/door_close.wav
+```
+
+<ParamField path="DIRECTION" type="string" required>
+  Door orientation: `"NORTH"`, `"SOUTH"`, `"EAST"`, or `"WEST"`
+</ParamField>
+
+<ParamField path="DOOR" type="string" required>
+  Path to door texture sprite (used to generate animation frames)
+</ParamField>
+
+<ParamField path="SIDES" type="string">
+  Path to door edge/side texture
+</ParamField>
+
+<ParamField path="AUTO_CLOSE_DELAY" type="double">
+  Seconds before automatic closing (0 = no auto-close)
+</ParamField>
+
+<ParamField path="CLOSEABLE" type="string">
+  `"TRUE"` to allow closing, `"FALSE"` to keep open (default: `TRUE`)
+</ParamField>
+
+<ParamField path="ANIMATION_DELAY" type="double">
+  Animation duration in seconds (multiplied by 10 internally)
+</ParamField>
+
+<ParamField path="OPEN" type="string">
+  Path to door open sound effect
+</ParamField>
+
+<ParamField path="CLOSE" type="string">
+  Path to door close sound effect
+</ParamField>
+
+### Elevator Configuration
+
+```
+E_MAP_PATH maps/level2.cub
+E_NO assets/textures/elevator_north.bmp
+E_SO assets/textures/elevator_south.bmp
+E_WE assets/textures/elevator_west.bmp
+E_EA assets/textures/elevator_east.bmp
+```
+
+<ParamField path="MAP_PATH" type="string">
+  Path to the map file to load when elevator is activated
+</ParamField>
+
+Elevators also support all wall texture configuration options (NO, SO, WE, EA).
+
+## Door Animation System
+
+Doors automatically generate animation frames based on configuration:
+
+1. **Animation Frames**: Calculated as `animation_delay * DOOR_ANIMATION_FPS`
+2. **Frame Generation**: Door sprite is sliced into frames based on width
+3. **Direction**: North/South doors show opening sprite on north face, East/West doors show on west face
+4. **Sides**: Door edge sprites are applied to perpendicular faces
+
+## Example
+
+```c
+// Create a billboard tree
+t_billboard *tree = billboard_new(game, window, 'T');
+tree->y_centered = true;
+tree->entity.coords = (t_coords){5.5, 5.5, 0};
+
+// Create a wall
+t_wall *wall = wall_new(game, window, '1');
+wall->entity.coords = (t_coords){10.0, 10.0, 0};
+
+// Create a door
+t_door *door = door_new_e(game, window, 'D');
+if (!door)
+    return (error_handler("Failed to create door"));
+
+door->auto_close_delay = 3000; // 3 seconds
+door->entity.coords = (t_coords){15.0, 15.0, 0};
+
+// Create an elevator
+t_elevator *elevator = elevator_new(game, window, 'E');
+elevator->map_path = "maps/level2.cub";
+elevator->wall.entity.actionable = true;
+elevator->wall.entity.coords = (t_coords){20.0, 20.0, 0};
+
+// Open door (typically called from action handler)
+if (!door->opened)
+{
+    door->opened = true;
+    door->last_opened_at = ft_get_time();
+    fta_play(door->open_sound);
+}
+```
+
+## See Also
+
+- [Characters](/api/characters) - Character billboards
+- [Entities](/api/entities) - Base entity system

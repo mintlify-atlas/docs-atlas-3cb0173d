@@ -1,0 +1,306 @@
+---
+title: 'Sprites'
+description: 'Sprite animation system for textures and billboards'
+---
+
+## Overview
+
+The sprite system manages animated and static images in Cub3D. Sprites are used for walls, billboards, UI elements, and character animations. They support frame-based animation with configurable timing and looping.
+
+## s_sprite Structure
+
+Core structure for sprite animation.
+
+```c
+struct s_sprite
+{
+    t_list          *images;
+    ssize_t         index;
+    t_time          updated_at;
+    t_time          update_delay;
+    bool            reversed;
+    bool            running;
+    bool            loop;
+};
+```
+
+### Fields
+
+<ResponseField name="images" type="t_list*">
+  Linked list of `t_ftm_image*` frames. Each node contains one frame of the animation.
+</ResponseField>
+
+<ResponseField name="index" type="ssize_t">
+  Current frame index in the animation sequence (0-based)
+</ResponseField>
+
+<ResponseField name="updated_at" type="t_time">
+  Timestamp of the last frame update (milliseconds)
+</ResponseField>
+
+<ResponseField name="update_delay" type="t_time">
+  Milliseconds between frame updates. Set to 0 for static sprites.
+</ResponseField>
+
+<ResponseField name="reversed" type="bool">
+  If true, animation plays backward (decrements index instead of incrementing)
+</ResponseField>
+
+<ResponseField name="running" type="bool">
+  Whether the animation is currently playing. Set to false when non-looping animation finishes.
+</ResponseField>
+
+<ResponseField name="loop" type="bool">
+  If true, animation loops infinitely. If false, stops at the last frame.
+</ResponseField>
+
+## Core Functions
+
+### sprite_new()
+
+Creates a new sprite with the given frames and animation timing.
+
+```c
+t_sprite *sprite_new(t_list *images, t_time update_delay)
+```
+
+<ParamField path="images" type="t_list*" required>
+  Linked list of `t_ftm_image*` pointers representing animation frames
+</ParamField>
+
+<ParamField path="update_delay" type="t_time" required>
+  Milliseconds between frame changes. Use 0 for static images.
+</ParamField>
+
+**Returns:** Pointer to newly allocated `t_sprite`, or NULL on allocation failure
+
+**Behavior:**
+- Allocates and initializes sprite structure
+- Sets `running` to true by default
+- Sets `index` to 0
+- Initializes `updated_at` to current time
+
+**Source:** `src/utils/sprites/sprites0.c:47`
+
+### get_sprite_image()
+
+Retrieves the current frame of an animated or static sprite.
+
+```c
+t_ftm_image *get_sprite_image(t_sprite *sprite)
+```
+
+<ParamField path="sprite" type="t_sprite*">
+  The sprite to get the current frame from. Can be NULL.
+</ParamField>
+
+**Returns:** 
+- Current frame image (`t_ftm_image*`) if sprite is valid
+- Placeholder image if sprite is NULL
+- NULL if the current index is out of bounds
+
+**Behavior:**
+1. Returns placeholder if sprite is NULL
+2. Checks if enough time has elapsed since last update
+3. If `update_delay` > 0 and `running` is true:
+   - Calculates how many frames to advance based on elapsed time
+   - Updates `index` (forward if `reversed` is false, backward if true)
+   - Handles looping or stopping based on `loop` flag
+   - Updates `updated_at` timestamp
+4. Returns the image at the current index
+
+**Source:** `src/utils/sprites/sprites1.c:36`
+
+### get_sprite3d_image()
+
+Retrieves the appropriate sprite from a 3D sprite array based on viewing angle.
+
+```c
+t_ftm_image *get_sprite3d_image(t_sprite **sprite3d, double angle)
+```
+
+<ParamField path="sprite3d" type="t_sprite**" required>
+  Array of 360 sprite pointers (one for each degree of viewing angle)
+</ParamField>
+
+<ParamField path="angle" type="double" required>
+  Viewing angle in degrees (0-359). Automatically normalized.
+</ParamField>
+
+**Returns:** Current frame of the sprite corresponding to the viewing angle
+
+**Usage:** Used for billboards and characters that have different sprites based on which direction they're viewed from.
+
+**Example:**
+```c
+// Get sprite for character viewed from 45 degrees
+t_ftm_image *img = get_sprite3d_image(character->sprites, 45.0);
+```
+
+**Source:** `src/utils/sprites/sprites1.c:53`
+
+### init_sprite()
+
+Initializes an existing sprite structure.
+
+```c
+void init_sprite(t_sprite *sprite, t_list *images, t_time update_delay)
+```
+
+<ParamField path="sprite" type="t_sprite*" required>
+  Sprite structure to initialize
+</ParamField>
+
+<ParamField path="images" type="t_list*" required>
+  List of image frames
+</ParamField>
+
+<ParamField path="update_delay" type="t_time" required>
+  Animation frame delay in milliseconds
+</ParamField>
+
+**Source:** `src/utils/sprites/sprites0.c:26`
+
+### sprite_soft_copy()
+
+Creates a shallow copy of a sprite, resetting animation state.
+
+```c
+void sprite_soft_copy(t_sprite **dst, t_sprite *src)
+```
+
+<ParamField path="dst" type="t_sprite**" required>
+  Pointer to destination sprite pointer (allocated if NULL)
+</ParamField>
+
+<ParamField path="src" type="t_sprite*" required>
+  Source sprite to copy from
+</ParamField>
+
+**Behavior:**
+- Allocates dst if NULL
+- Copies all fields from src
+- Resets `index` to 0
+- Sets `running` to true
+- Resets `updated_at` to current time
+- **Note:** Images list is shared (not deep copied)
+
+**Source:** `src/utils/sprites/sprites0.c:33`
+
+## Memory Management
+
+### free_sprite()
+
+Frees sprite and its image list.
+
+```c
+void free_sprite(void *data)
+```
+
+<ParamField path="data" type="void*" required>
+  Pointer to `t_sprite` to free
+</ParamField>
+
+**Source:** `src/utils/sprites/sprites0.c:20`
+
+### clear_sprite()
+
+Clears sprite's image list without freeing the sprite itself.
+
+```c
+void clear_sprite(void *data)
+```
+
+<ParamField path="data" type="void*" required>
+  Pointer to `t_sprite` to clear
+</ParamField>
+
+**Source:** `src/utils/sprites/sprites0.c:15`
+
+## Animation Example
+
+Creating and using an animated sprite:
+
+```c
+// Load animation frames
+t_list *frames = NULL;
+ft_list_add(&frames, ftm_image_load("frame1.bmp"), NULL);
+ft_list_add(&frames, ftm_image_load("frame2.bmp"), NULL);
+ft_list_add(&frames, ftm_image_load("frame3.bmp"), NULL);
+
+// Create sprite with 100ms per frame
+t_sprite *anim = sprite_new(frames, 100);
+anim->loop = true;  // Loop infinitely
+
+// In render loop:
+t_ftm_image *current_frame = get_sprite_image(anim);
+ftm_draw_image(canvas, current_frame, x, y);
+```
+
+## 3D Sprite Arrays
+
+3D sprites (sprite3d) are used for directional billboards:
+
+```c
+// Create 360-degree sprite array
+t_sprite **sprite3d = ft_calloc(360, sizeof(t_sprite*));
+
+for (int angle = 0; angle < 360; angle++) {
+    // Load sprite for this viewing angle
+    sprite3d[angle] = load_directional_sprite(angle);
+}
+
+// Render based on viewing angle
+double view_angle = ft_angle_distance(camera_pos, entity_pos);
+t_ftm_image *frame = get_sprite3d_image(sprite3d, view_angle);
+```
+
+## Billboard Sprites
+
+Billboards use sprites for rendering:
+
+```c
+struct s_billboard
+{
+    t_entity        entity;
+    bool            y_centered;
+    t_sprite        **sprites;  // 3D sprite array
+};
+```
+
+See [Camera](/api/camera) for how billboards are rendered.
+
+## Door Animation
+
+Doors use animated sprites:
+
+<ParamField path="DOOR_ANIMATION_FPS" type="int" default="6">
+  Frames per second for door opening/closing animations. Defined in `cub3d.h:87`.
+</ParamField>
+
+Door sprites include:
+- `door_sprite` - Closed door texture
+- `opening_sprite` - Animation of door opening
+- `door_sides_sprite` - Side textures when door is open
+
+## Related Functions
+
+### get_entity_sprite()
+
+Gets the appropriate sprite for an entity based on direction.
+
+```c
+t_sprite *get_entity_sprite(t_entity *entity, t_direction direction)
+```
+
+Used for walls and doors that have different textures per cardinal direction (NORTH, SOUTH, EAST, WEST).
+
+## Related Constants
+
+<ParamField path="PLACEHOLDER_IMAGE_PATH" type="string" default="assets/textures/placeholder.bmp">
+  Path to placeholder image shown when sprite is NULL. Defined in `cub3d.h:53`.
+</ParamField>
+
+<ParamField path="LOADING_IMAGE_PATH" type="string" default="assets/textures/loading.bmp">
+  Path to loading screen image. Defined in `cub3d.h:54`.
+</ParamField>

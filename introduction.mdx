@@ -1,0 +1,156 @@
+---
+title: Introduction to Cub3D
+description: A Wolfenstein 3D-inspired raycasting engine built in C with SDL2
+---
+
+# Welcome to Cub3D
+
+Cub3D is a raycasting engine inspired by the legendary [Wolfenstein 3D](https://en.wikipedia.org/wiki/Wolfenstein_3D), developed as part of the [42 School](https://www.42lisboa.com) curriculum. The project implements a 3D first-person perspective using mathematical raycasting techniques, rendering a 2D map as an immersive 3D environment.
+
+## What is Cub3D?
+
+Cub3D explores the mathematical foundations of raycasting to create a pseudo-3D environment on a 2D screen. The engine handles:
+
+- Real-time raycasting for wall rendering
+- Texture mapping and sprite rendering
+- Collision detection and player movement
+- Audio integration with spatial sound
+- Controller support (Xbox, PlayStation, etc.)
+- AI algorithms for enemy behavior
+- Interactive elements like doors, elevators, and collectibles
+
+## Featured Maps
+
+The project includes two distinct experiences:
+
+<CardGroup cols={2}>
+  <Card title="42 Lisboa Campus" icon="building" href="#42-lisboa">
+    Explore a 3D recreation of the 42 Lisboa campus with interactive elements
+  </Card>
+  <Card title="Wolfenstein 3D Levels" icon="gun" href="#wolfenstein">
+    Complete first-person shooter experience with enemies, weapons, and the first two floors from the original game
+  </Card>
+</CardGroup>
+
+### 42 Lisboa
+
+A faithful 3D representation of the [42 Lisboa](https://www.42lisboa.com) campus that you can freely explore. This map showcases the engine's capabilities for architectural visualization and navigation.
+
+### Wolfenstein 3D
+
+A complete first-person shooter featuring:
+- Multiple enemy types with AI behavior
+- Arsenal of weapons (pistol, machine gun, knife)
+- Health and ammo pickups
+- Elevators for multi-floor navigation
+- The first two floors from the original Wolfenstein 3D
+- A secret bonus floor for adventurous players
+
+## Platform Support
+
+<CardGroup cols={2}>
+  <Card title="Desktop" icon="desktop">
+    **Linux & macOS**
+    
+    Native performance with SDL2
+  </Card>
+  <Card title="Web Browser" icon="globe">
+    **WebAssembly**
+    
+    Play directly in your browser via Emscripten
+  </Card>
+</CardGroup>
+
+### Desktop Version
+
+The native desktop version runs on both Linux and macOS, utilizing SDL2 for graphics rendering and input handling. It provides optimal performance with full controller support.
+
+### Web Version
+
+Thanks to **Emscripten** and **WebAssembly**, Cub3D runs seamlessly in modern web browsers. The web version maintains feature parity with the desktop build, allowing anyone to experience the game without installation.
+
+Play it here: [https://omelhorsite.pt/en/games/cub3d](https://omelhorsite.pt/en/games/cub3d)
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Raycasting Engine" icon="cube">
+    Mathematical raycasting for real-time 3D rendering from 2D maps
+  </Card>
+  
+  <Card title="Texture Mapping" icon="image">
+    Wall textures with proper perspective correction
+  </Card>
+  
+  <Card title="Sprite System" icon="user">
+    Billboard sprites with 8-directional animation support
+  </Card>
+  
+  <Card title="Audio Integration" icon="volume-high">
+    Spatial audio with miniaudio library, supporting MP3 and other formats
+  </Card>
+  
+  <Card title="Entity System" icon="users">
+    NPCs, enemies, and interactive objects with state machines
+  </Card>
+  
+  <Card title="Controller Support" icon="gamepad">
+    Full support for Xbox, PlayStation, and other game controllers
+  </Card>
+  
+  <Card title="Map Format" icon="map">
+    Custom .cub format with extensive configuration options
+  </Card>
+  
+  <Card title="Cross-Platform" icon="code">
+    Runs on Linux, macOS, and web browsers via WASM
+  </Card>
+</CardGroup>
+
+## Technical Highlights
+
+### Raycasting Implementation
+
+The core rendering technique uses raycasting to simulate 3D perspective. For each column of pixels on screen, a ray is cast from the player's position into the world, determining wall distances and heights to create the illusion of depth.
+
+### Entity Animation System
+
+Entities support 8-directional sprites with configurable animation frames, allowing for smooth character movement and combat animations from any viewing angle.
+
+### Audio Engine
+
+Integrated with the **miniaudio** library, Cub3D supports:
+- Positional 3D audio
+- Multiple simultaneous sound instances
+- Background music loops
+- Dynamic sound effects based on gameplay events
+
+### Map Configuration
+
+Maps are defined in `.cub` format, which includes:
+- Wall texture assignments (NO, SO, EA, WE)
+- Floor and ceiling colors
+- Entity definitions and placements
+- Custom sprite configurations
+- Interactive element properties (doors, elevators)
+- Player spawn position and orientation
+
+## Get Started
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Compile and run Cub3D in minutes
+  </Card>
+  
+  <Card title="Creating Maps" icon="map" href="/guides/creating-maps">
+    Learn how to build custom maps and configure entities
+  </Card>
+</CardGroup>
+
+## Credits
+
+Developed by:
+- **[Afonso Coutinho](https://github.com/afonsopc)** (afpachec)
+- **[Paulo Cordeiro](https://github.com/pvcordeiro)** (pvcordeiro)
+
+Cub3D is an educational project created as part of the 42 School curriculum, demonstrating advanced graphics programming concepts, game engine architecture, and mathematical rendering techniques.

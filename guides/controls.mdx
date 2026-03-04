@@ -1,0 +1,493 @@
+---
+title: Game Controls
+description: Complete reference for keyboard, mouse, and gamepad controls in Cub3D
+icon: gamepad
+---
+
+## Control Schemes
+
+Cub3D supports three input methods that can be used simultaneously:
+
+<CardGroup cols={3}>
+  <Card title="Keyboard" icon="keyboard">
+    WASD movement + Arrow keys for looking
+  </Card>
+  <Card title="Mouse" icon="mouse">
+    Mouse look with FPS-style camera control
+  </Card>
+  <Card title="Gamepad" icon="gamepad">
+    Full controller support (Xbox, PlayStation, etc.)
+  </Card>
+</CardGroup>
+
+## Keyboard Controls
+
+### Movement
+
+| Key | Action |
+|-----|--------|
+| `W` | Move forward |
+| `S` | Move backward |
+| `A` | Strafe left |
+| `D` | Strafe right |
+| `Left Shift` | Sprint (increases movement speed) |
+
+<Info>
+  Default walk speed: **4.0 units/sec**  
+  Sprint speed: **6.0 units/sec**
+</Info>
+
+### Camera Control
+
+| Key | Action |
+|-----|--------|
+| `Left Arrow` | Look left |
+| `Right Arrow` | Look right |
+| `M` | Toggle mouse look on/off |
+
+<Note>
+  Keyboard look velocity: **180°/sec**  
+  Mouse look velocity: **20.0** (sensitivity multiplier)
+</Note>
+
+### Actions
+
+| Key | Action |
+|-----|--------|
+| `E` | Interact / Open doors |
+| `Space` | Use equipped item / Fire weapon |
+| `Q` | Drop current item |
+| `R` | Cycle inventory (next item) |
+
+### Mouse Wheel
+
+When mouse look is enabled:
+
+| Input | Action |
+|-------|--------|
+| Mouse Wheel Up | Cycle inventory forward |
+| Mouse Wheel Down | Cycle inventory backward |
+
+<Tip>
+  Inventory scroll has a 0.5-second cooldown to prevent accidental double-scrolling.
+</Tip>
+
+### HUD & Debug
+
+| Key | Action |
+|-----|--------|
+| `F1` | Toggle fullscreen |
+| `F2` | Toggle stats HUD |
+| `F3` | Toggle debug info (FPS, coordinates) |
+| `F4` | Toggle minimap |
+| `F5` | Toggle action prompts |
+| `F6` | Toggle entire HUD |
+| `F7` | Reload/detect gamepads |
+
+### Minimap Controls
+
+| Key | Action |
+|-----|--------|
+| `8` | Zoom out minimap |
+| `9` | Reset minimap zoom (5.0x) |
+| `0` | Zoom in minimap |
+
+<Note>
+  Each zoom level changes by a factor of 1.2x.
+</Note>
+
+### Multiplayer
+
+| Key | Action |
+|-----|--------|
+| `P` | Activate additional player |
+| `O` | Deactivate a player |
+
+<Info>
+  Supports up to **4 simultaneous players** (split-screen).
+</Info>
+
+### System
+
+| Key | Action |
+|-----|--------|
+| `ESC` | Return to hub map (maps/hub.cub) |
+| `K` | Toggle keyboard-only mode (disables mouse/gamepad) |
+
+### Cheat Codes
+
+<Warning>
+  These are debug features and may break gameplay:
+</Warning>
+
+| Key | Effect |
+|-----|--------|
+| `I` | Toggle invincibility + restore health |
+| `B` | Toggle noclip (walk through walls) |
+
+<Info>
+  The `cheating` flag is set when invincibility or noclip is active.
+</Info>
+
+## Mouse Controls
+
+### Mouse Look
+
+<Steps>
+  <Step title="Enable mouse look">
+    Press `M` to toggle mouse control on/off.
+  </Step>
+
+  <Step title="Camera movement">
+    Move the mouse left/right to rotate the camera.
+    
+    The cursor is automatically centered, and movement delta is calculated:
+    ```c
+    movement = mouse_x - (window_width / 2)
+    ```
+  </Step>
+
+  <Step title="Sensitivity curve">
+    Small movements are dampened for precision:
+    ```c
+    if (abs(movement) < 10)
+        movement = movement * (0.5 + (abs(movement) / 20.0))
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  Mouse look works best in fullscreen mode (F1).
+</Tip>
+
+### Mouse Deadzone
+
+Movements within 10 pixels of center are scaled down to reduce jitter.
+
+## Gamepad Controls
+
+### Supported Controllers
+
+<CardGroup cols={3}>
+  <Card title="Xbox" icon="xbox">
+    Xbox One, Series X/S, 360
+  </Card>
+  <Card title="PlayStation" icon="playstation">
+    DualShock 4, DualSense
+  </Card>
+  <Card title="Generic" icon="gamepad">
+    Any SDL2-compatible gamepad
+  </Card>
+</CardGroup>
+
+### Button Mapping
+
+<Tabs>
+  <Tab title="Xbox Layout">
+    | Button | Action |
+    |--------|--------|
+    | Left Stick | Move (forward/back/strafe) |
+    | Right Stick | Look (rotate camera) |
+    | LT (L2) | Sprint (when > 80% pressed) |
+    | RT (R2) | Use item / Fire weapon (when > 80% pressed) |
+    | LB (L1) | *Not mapped* |
+    | RB (R1) | Cycle inventory |
+    | A (Cross) | *Not mapped* |
+    | B (Circle) | Drop item |
+    | X (Square) | Interact / Open doors |
+    | Y (Triangle) | *Not mapped* |
+    | Menu/Start | Activate (keyboard-only override) |
+    | View/Back | *Not mapped* |
+  </Tab>
+  <Tab title="PlayStation Layout">
+    | Button | Action |
+    |--------|--------|
+    | Left Stick | Move (forward/back/strafe) |
+    | Right Stick | Look (rotate camera) |
+    | L2 | Sprint (when > 80% pressed) |
+    | R2 | Use item / Fire weapon (when > 80% pressed) |
+    | L1 | *Not mapped* |
+    | R1 | Cycle inventory |
+    | Cross (X) | *Not mapped* |
+    | Circle (O) | Drop item |
+    | Square (□) | Interact / Open doors |
+    | Triangle (△) | *Not mapped* |
+    | Options | Activate (keyboard-only override) |
+    | Share | *Not mapped* |
+  </Tab>
+</Tabs>
+
+### Analog Stick Behavior
+
+#### Left Stick (Movement)
+
+The stick is divided into directional zones:
+
+<CodeGroup>
+```c Forward
+// Y-axis: 0.0 to 0.3 (upper zone)
+walking_forward = (stick_y < 0.3)
+```
+
+```c Backward
+// Y-axis: 0.7 to 1.0 (lower zone)
+walking_backward = (stick_y > 0.7)
+```
+
+```c Strafe Left
+// X-axis: 0.0 to 0.3 (left zone)
+walking_left = (stick_x < 0.3)
+```
+
+```c Strafe Right
+// X-axis: 0.7 to 1.0 (right zone)
+walking_right = (stick_x > 0.7)
+```
+</CodeGroup>
+
+<Info>
+  The center deadzone (0.3 to 0.7) prevents stick drift.
+</Info>
+
+#### Right Stick (Camera)
+
+Same zone mapping for camera rotation:
+
+- **X < 0.3**: Look left
+- **X > 0.7**: Look right
+- **Center (0.3-0.7)**: No rotation
+
+### Trigger Sensitivity
+
+```c
+// Triggers are pressure-sensitive
+pressure = normalize_pressure(trigger_value)  // 0.0 to 1.0
+activated = (pressure > 0.8)  // 80% threshold
+```
+
+<Tip>
+  Light trigger presses won't fire weapons. This prevents accidental shots.
+</Tip>
+
+### Controller Deadzone
+
+Raw analog values are filtered:
+
+```c
+#define CONTROLLERS_DEADZONE 8000  // Out of 32767
+
+if (abs(raw_value) < 8000)
+    raw_value = 0;
+```
+
+This prevents drift when the stick is released.
+
+### Gamepad Detection
+
+<Steps>
+  <Step title="Automatic detection">
+    Controllers are detected on game startup.
+  </Step>
+
+  <Step title="Hot-plugging">
+    Press `F7` to manually reload and detect newly connected controllers.
+  </Step>
+
+  <Step title="Multiple controllers">
+    Each player can use a separate gamepad (up to 4 players).
+  </Step>
+</Steps>
+
+## Advanced Configuration
+
+### Controller Implementation
+
+The player controller is defined in `src/utils/entities/controller/player/player2.c:player2.c`:
+
+```c
+t_player_keys get_player_gamepad_keys(void)
+{
+    return ((t_player_keys){
+        .walking_forward = {FTM_GAMEPAD_LSTICK, false, 0.0, 1.0,
+            true, {0.0, 0.0, 0}, {1.0, 0.3, 0}},
+        .walking_backward = {FTM_GAMEPAD_LSTICK, false, 0.0, 1.0,
+            true, {0.0, 0.7, 0}, {1.0, 1.0, 0}},
+        .looking_left = {FTM_GAMEPAD_RSTICK, false, 0.0, 1.0,
+            true, {0.0, 0.0, 0}, {0.3, 1.0, 0}},
+        .looking_right = {FTM_GAMEPAD_RSTICK, false, 0.0, 1.0,
+            true, {0.7, 0.0, 0}, {1.0, 1.0, 0}},
+        .sprinting = {FTM_GAMEPAD_L2, true, 0.8, 1.0, false, {0}, {0}},
+        .item_use = {FTM_GAMEPAD_R2, true, 0.8, 1.0, false, {0}, {0}},
+        // ...
+    });
+}
+```
+
+### Custom Key Bindings
+
+To modify key bindings, edit `src/utils/entities/controller/player/player2.c:player2.c`:
+
+<CodeGroup>
+```c Keyboard Keys
+t_player_keys get_player_keyboard_keys(void)
+{
+    return ((t_player_keys){
+        .walking_forward = {FTM_KEY_W, false, 0.0, 1.0, false, {0}, {0}},
+        .walking_backward = {FTM_KEY_S, false, 0.0, 1.0, false, {0}, {0}},
+        // Change these FTM_KEY_* constants to remap keys
+    });
+}
+```
+
+```c Gamepad Buttons
+t_player_keys get_player_gamepad_keys(void)
+{
+    return ((t_player_keys){
+        .action = {FTM_GAMEPAD_X, false, 0.0, 1.0, false, {0}, {0}},
+        // Change these FTM_GAMEPAD_* constants to remap buttons
+    });
+}
+```
+</CodeGroup>
+
+### Available Key Constants
+
+<AccordionGroup>
+  <Accordion title="Keyboard (FTM_KEY_*)">
+    - `FTM_KEY_W`, `FTM_KEY_A`, `FTM_KEY_S`, `FTM_KEY_D`
+    - `FTM_KEY_SPACE`, `FTM_KEY_LSHIFT`, `FTM_KEY_ESC`
+    - `FTM_KEY_E`, `FTM_KEY_Q`, `FTM_KEY_R`
+    - `FTM_KEY_LEFT`, `FTM_KEY_RIGHT`, `FTM_KEY_UP`, `FTM_KEY_DOWN`
+    - `FTM_KEY_F1` through `FTM_KEY_F12`
+    - `FTM_KEY_0` through `FTM_KEY_9`
+    - `FTM_KEY_M`, `FTM_KEY_K`, `FTM_KEY_P`, `FTM_KEY_O`
+    - `FTM_KEY_I`, `FTM_KEY_B`
+  </Accordion>
+
+  <Accordion title="Gamepad Buttons (FTM_GAMEPAD_*)">
+    - `FTM_GAMEPAD_A` (Xbox A / PS Cross)
+    - `FTM_GAMEPAD_B` (Xbox B / PS Circle)
+    - `FTM_GAMEPAD_X` (Xbox X / PS Square)
+    - `FTM_GAMEPAD_Y` (Xbox Y / PS Triangle)
+    - `FTM_GAMEPAD_L1`, `FTM_GAMEPAD_R1` (Bumpers)
+    - `FTM_GAMEPAD_L2`, `FTM_GAMEPAD_R2` (Triggers)
+    - `FTM_GAMEPAD_MENU` (Start/Options)
+    - `FTM_GAMEPAD_UP`, `FTM_GAMEPAD_DOWN`, `FTM_GAMEPAD_LEFT`, `FTM_GAMEPAD_RIGHT` (D-Pad)
+  </Accordion>
+
+  <Accordion title="Gamepad Axes (FTM_GAMEPAD_*)">
+    - `FTM_GAMEPAD_LSTICK` (Left analog stick)
+    - `FTM_GAMEPAD_RSTICK` (Right analog stick)
+  </Accordion>
+</AccordionGroup>
+
+## Player Configuration Constants
+
+Defined in `headers/cub3d.h:cub3d.h`:
+
+```c
+// Player velocities
+#define PLAYER_MOUSE_LOOK_VELOCITY 20.0
+#define PLAYER_KEY_LOOK_VELOCITY 180.0
+#define PLAYER_WALK_VELOCITY 4.0
+#define PLAYER_SPRINT_VELOCITY 6.0
+
+// Player camera
+#define PLAYER_FOV 66.0  // Field of view in degrees
+
+// Inventory
+#define INVENTORY_SIZE 9
+#define INVENTORY_SCROLL_DELAY 0.5  // Seconds
+```
+
+Modify these to adjust gameplay feel.
+
+## Control Flow
+
+The control system processes input through these layers:
+
+<Steps>
+  <Step title="SDL Event Capture">
+    SDL2 captures keyboard, mouse, and gamepad events
+  </Step>
+
+  <Step title="Controller Event Handler">
+    `ftm_controller_event_handler()` processes gamepad input in `src/ft_mlx_utils/controllers/controllers2.c:controllers2.c`
+  </Step>
+
+  <Step title="Key Hook">
+    `key_hook()` in `src/utils/loop/keys.c:keys.c` handles keyboard input
+  </Step>
+
+  <Step title="Mouse Hook">
+    `mouse_hook()` in `src/utils/loop/mouse.c:mouse.c` processes mouse movement
+  </Step>
+
+  <Step title="Entity Controllers">
+    Each entity's `controller` struct manages movement and actions
+  </Step>
+
+  <Step title="Frame Processing">
+    `moviment_frame()` updates entity positions based on controller state
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Gamepad not detected">
+    - Press F7 to reload controllers
+    - Ensure controller is connected before starting the game
+    - Check if controller is recognized by your OS:
+      ```bash Linux
+      ls /dev/input/js*
+      ```
+      ```bash macOS
+      system_profiler SPUSBDataType | grep -i game
+      ```
+    - Verify SDL2 gamepad support:
+      ```bash
+      ./cub3d maps/hub.cub
+      # Look for "Controller 0: <name>" in console output
+      ```
+  </Accordion>
+
+  <Accordion title="Mouse look not working">
+    - Press M to toggle mouse look on/off
+    - Check if MOUSE directive in .cub file is set to FALSE
+    - Ensure window has focus (click on the game window)
+  </Accordion>
+
+  <Accordion title="Analog stick drift">
+    The deadzone is set to 8000/32767 (~24%). If drift persists:
+    - Clean or recalibrate your controller
+    - Increase `CONTROLLERS_DEADZONE` in `src/ft_mlx_utils/controllers/controllers.h:controllers.h`
+  </Accordion>
+
+  <Accordion title="Controls feel too fast/slow">
+    Adjust velocity constants in `headers/cub3d.h:cub3d.h`:
+    ```c
+    #define PLAYER_WALK_VELOCITY 4.0      // Decrease for slower movement
+    #define PLAYER_MOUSE_LOOK_VELOCITY 20.0  // Decrease for lower sensitivity
+    ```
+    Rebuild after changes:
+    ```bash
+    make re
+    ```
+  </Accordion>
+
+  <Accordion title="Keyboard-only mode stuck">
+    Press K to toggle keyboard-only mode off. This mode disables mouse and gamepad input.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Maps" icon="map" href="/guides/creating-maps">
+    Design custom levels and configure entities
+  </Card>
+  <Card title="Building" icon="hammer" href="/guides/building">
+    Compile and test your changes
+  </Card>
+</CardGroup>

@@ -1,0 +1,228 @@
+---
+title: 'Game'
+description: 'Core game instance management functions for creating, rendering, and cleaning up game state'
+---
+
+## Overview
+
+The game module provides the primary interface for managing the Cub3D game instance. It handles initialization of all game subsystems including entities, sprites, sounds, rendering threads, and the HUD.
+
+## Functions
+
+### game_new_e()
+
+Creates and initializes a new game instance with all required subsystems.
+
+```c
+t_game *game_new_e(t_ftm_window *window, t_map *map);
+```
+
+<ParamField path="window" type="t_ftm_window *" required>
+  The MLX window instance to render the game to
+</ParamField>
+
+<ParamField path="map" type="t_map *" required>
+  The parsed map data containing level layout and entity definitions
+</ParamField>
+
+<ResponseField name="return" type="t_game *">
+  Pointer to the newly created game instance, or NULL on error
+</ResponseField>
+
+#### Implementation Details
+
+The function performs initialization in three stages:
+
+1. **Basic Initialization** - Creates hashmaps for sprites, sounds, fonts, and 3D sprites; initializes environment and minimap
+2. **Entity Initialization** - Spawns all entities from the map, initializes fonts, builds the walls matrix and billboards vector
+3. **Finalization** - Initializes HUD, window, FPS tracking, rendering threads, and background audio/sprites
+
+If any stage fails, the function automatically cleans up and returns NULL.
+
+#### Usage Example
+
+```c
+// From loop.c - Loading a new map
+t_map *map = parse_map_e(path);
+if (!map)
+    return;
+
+t_game *game = game_new_e(window, map);
+if (!game) {
+    free_map(map);
+    return;
+}
+```
+
+---
+
+### clear_game()
+
+Clears all dynamically allocated data within a game instance without freeing the game structure itself.
+
+```c
+void clear_game(void *game);
+```
+
+<ParamField path="game" type="void *" required>
+  Pointer to the game instance to clear (cast from t_game *)
+</ParamField>
+
+#### What Gets Cleared
+
+- All entities in the entities list
+- Sprite, font, and sound hashmaps
+- 3D sprites hashmap
+- Camera rendering threads
+- HUD stats states
+- Walls matrix and billboards vector
+
+The structure is zeroed out using `ft_bzero()` after cleanup.
+
+<Note>
+  This function is safe to call with NULL. It checks for NULL before proceeding.
+</Note>
+
+---
+
+### free_game()
+
+Completely frees a game instance including the structure itself.
+
+```c
+void free_game(void *game);
+```
+
+<ParamField path="game" type="void *" required>
+  Pointer to the game instance to free (cast from t_game *)
+</ParamField>
+
+#### Usage Example
+
+```c
+// From loop.c - Cleaning up before loading new map
+free_game(cub3d()->game);
+cub3d()->game = NULL;
+```
+
+<Warning>
+  Always set the pointer to NULL after calling free_game() to avoid dangling pointers.
+</Warning>
+
+---
+
+### render_game()
+
+Renders the complete game view for a single character to a canvas.
+
+```c
+void render_game(t_game *game, t_ftm_image *canvas, t_character *character);
+```
+
+<ParamField path="game" type="t_game *" required>
+  The game instance containing all render data
+</ParamField>
+
+<ParamField path="canvas" type="t_ftm_image *" required>
+  The image buffer to render to
+</ParamField>
+
+<ParamField path="character" type="t_character *" required>
+  The character whose perspective to render from
+</ParamField>
+
+#### Rendering Pipeline
+
+1. Draws ceiling and floor colors from environment settings
+2. Renders the 3D camera view (raycasting, walls, entities)
+3. Overlays the HUD (minimap, stats, debug info, action prompts)
+
+#### Usage Example
+
+```c
+// From render1.c - Rendering for a player
+render_game(game, game->players[i]->canvas, 
+           (t_character *)game->players[i]);
+```
+
+<Note>
+  This function is typically called per-player in split-screen scenarios. Each player gets their own canvas.
+</Note>
+
+---
+
+### render_players_game()
+
+Renders all active players to the window with automatic split-screen layout.
+
+```c
+void render_players_game(t_game *game, t_ftm_window *window);
+```
+
+<ParamField path="game" type="t_game *" required>
+  The game instance to render
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  The window to render to
+</ParamField>
+
+#### Split-Screen Layouts
+
+The function automatically handles different player counts:
+
+- **1 Player**: Full screen
+- **2 Players**: Vertical split (left/right)
+- **3 Players**: Custom layout (2 top, 1 bottom center)
+- **4 Players**: Quad split (2x2 grid)
+
+For non-4-player split-screen modes, a background sprite is drawn behind the player canvases.
+
+#### Dynamic Canvas Management
+
+Player canvases are automatically:
+- Created on first use
+- Resized when window size changes
+- Repositioned when player count changes
+- Updated with the current player ray count
+
+#### Usage Example
+
+```c
+// From loop.c - Main render loop
+render_players_game(cub3d()->game, cub3d()->window);
+```
+
+---
+
+## Related Types
+
+### t_game Structure
+
+```c
+struct s_game
+{
+    t_fps             fps;              // Frame timing and FPS tracking
+    t_hud             hud;              // HUD configuration and state
+    t_environment     environment;      // Floor/ceiling colors
+    t_hashmap         *fonts;           // Font resources by name
+    t_hashmap         *sounds;          // Audio resources by name
+    t_map             *map;             // Current level map
+    t_player          *players[PLAYER_MAX];  // Player instances
+    int               player_controllers[PLAYER_MAX]; // Controller IDs
+    t_list            *entities;        // All active entities
+    t_hashmap         *sprites_3d;      // 3D sprite sets by name
+    t_hashmap         *sprites;         // 2D sprites by name
+    t_entity          ***walls;         // 2D matrix of wall entities
+    t_entity          **billboards;     // Sorted billboard entities
+    t_fta_audio       *background_sound; // Background music
+    t_sprite          *background_sprite; // Split-screen background
+    t_ftt_thread      *camera_threads[CAMERA_THREADS]; // Render threads
+};
+```
+
+## See Also
+
+- [Map](/api/map) - Map parsing and structure
+- [Entities](/api/entities) - Entity system
+- [Player](/api/player) - Player-specific functions

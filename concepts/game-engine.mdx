@@ -1,0 +1,542 @@
+---
+title: Game Engine
+description: Deep dive into the Cub3D game loop, delta time, FPS management, and multi-threading architecture
+---
+
+## Overview
+
+The Cub3D game engine manages the core game loop, frame timing, entity updates, rendering, and multi-threaded operations. It provides a consistent game experience across different hardware through delta time calculations and FPS limiting.
+
+## Main Game Structure
+
+The engine is organized around a central `t_game` structure:
+
+```c headers/cub3d.h
+struct s_game
+{
+	t_fps				fps;
+	t_hud				hud;
+	t_environment		environment;
+	t_hashmap			*fonts;
+	t_hashmap			*sounds;
+	t_map				*map;
+	t_player			*players[PLAYER_MAX];
+	int					player_controllers[PLAYER_MAX];
+	t_list				*entities;
+	t_hashmap			*sprites_3d;
+	t_hashmap			*sprites;
+	t_entity			***walls;
+	t_entity			**billboards;
+	t_fta_audio			*background_sound;
+	t_sprite			*background_sprite;
+	t_ftt_thread		*camera_threads[CAMERA_THREADS];
+};
+```
+
+## The Game Loop
+
+The main loop runs continuously, executing these steps each frame:
+
+```c src/utils/loop/loop.c
+void	loop(void)
+{
+	static bool		playing_bg_music;
+
+	// Handle map loading
+	if (cub3d()->new_map_path)
+	{
+		if (!cub3d()->started_map_load)
+			ftm_put_image_to_window_pitc(cub3d()->window, cub3d()->loading_image,
+				(t_ftm_pitc_config){.coords = {0, 0, 0}, .pixel_modifier = NULL,
+				.resize = true, .size = cub3d()->window->size, .crop = false});
+		else
+			load_new_map(&playing_bg_music);
+		cub3d()->started_map_load = !cub3d()->started_map_load;
+		return ;
+	}
+	if (!cub3d()->game)
+		return (ft_sleep(100));
+
+	// Start background music
+	if (!playing_bg_music)
+		fta_play(cub3d()->game->background_sound);
+	playing_bg_music = true;
+
+	// Main game loop
+	pthread_mutex_lock(&cub3d()->game_mutex);
+	update_frame(cub3d()->game);
+	call_entity_frames(cub3d()->game, &cub3d()->game->fps);
+	update_walls_matrix(cub3d()->game);
+	update_billboards_vec(cub3d()->game);
+	render_players_game(cub3d()->game, cub3d()->window);
+	#ifndef __EMSCRIPTEN__
+		process_fps_limit(cub3d()->game);
+	#endif
+	pthread_mutex_unlock(&cub3d()->game_mutex);
+}
+```
+
+### Loop Breakdown
+
+1. **Map Loading**: Handle asynchronous map transitions
+2. **Background Music**: Start audio playback
+3. **Frame Timing**: Calculate delta time and FPS
+4. **Entity Updates**: Call frame handlers for all entities
+5. **Spatial Updates**: Update walls matrix and billboards array
+6. **Rendering**: Render all player viewports
+7. **FPS Limiting**: Sleep to maintain target frame rate
+
+<Info>
+  The entire game state is protected by a mutex (`game_mutex`) to ensure thread-safe operations, especially important during map loading.
+</Info>
+
+## Delta Time System
+
+Delta time ensures consistent game speed regardless of frame rate.
+
+### FPS Structure
+
+```c headers/cub3d.h
+struct s_fps
+{
+	t_time	beginning;
+	t_time	fps_update_time;
+	t_time	last_frame_time;
+	double	delta_time;
+	int		fps_limit;
+	int		frame_count;
+	int		fps;
+	int		max;
+	int		min;
+};
+```
+
+### Delta Time Configuration
+
+```c headers/cub3d.h
+#define DELTA_TIME_START 0.016f  // ~60 FPS initial value
+#define FPS_LIMIT 1000
+```
+
+### Delta Time Calculation
+
+```c src/utils/loop/loop.c
+static void	update_frame(t_game *game)
+{
+	t_time	now;
+
+	now = ft_get_time();
+	game->fps.delta_time = (now - game->fps.last_frame_time) / 1000.0f;
+	game->fps.last_frame_time = now;
+	++game->fps.frame_count;
+
+	// Update FPS counter every 250ms
+	if (now - game->fps.fps_update_time > 250)
+	{
+		game->fps.fps = game->fps.frame_count * 4;
+		game->fps.frame_count = 0;
+		game->fps.fps_update_time = now;
+
+		// Track min/max FPS (after 3 second warmup)
+		if (now - game->fps.beginning < 3000)
+		{
+			game->fps.min = game->fps.fps;
+			return ;
+		}
+		if (game->fps.fps > game->fps.max)
+			game->fps.max = game->fps.fps;
+		if (game->fps.fps < game->fps.min)
+			game->fps.min = game->fps.fps;
+	}
+}
+```
+
+<Accordion title="Why Delta Time?">
+  Delta time makes game logic frame-rate independent. Instead of:
+  ```c
+  position += velocity;  // Depends on frame rate
+  ```
+  
+  We use:
+  ```c
+  position += velocity * delta_time;  // Consistent speed
+  ```
+  
+  This ensures:
+  - Consistent movement speed at any FPS
+  - Predictable physics behavior
+  - Same gameplay on different hardware
+</Accordion>
+
+## FPS Management
+
+### FPS Limiting
+
+The engine limits frame rate to prevent excessive CPU usage:
+
+```c src/utils/loop/loop.c
+static void	process_fps_limit(t_game *game)
+{
+	static t_time	previous_time;
+	t_time			current_time;
+	t_time			elapsed;
+	double			target_frame_time;
+
+	if (!previous_time)
+	{
+		previous_time = ft_get_time();
+		return ;
+	}
+	target_frame_time = 1000.0 / game->fps.fps_limit;
+	current_time = ft_get_time();
+	elapsed = current_time - previous_time;
+	if (elapsed < target_frame_time)
+		ft_sleep(target_frame_time - elapsed);
+	previous_time = ft_get_time();
+}
+```
+
+<Note>
+  FPS limiting is disabled when compiling for WebAssembly (`__EMSCRIPTEN__`) as browsers handle frame limiting through requestAnimationFrame.
+</Note>
+
+### FPS Counter Update
+
+FPS is calculated 4 times per second (every 250ms):
+
+```c
+if (now - game->fps.fps_update_time > 250)
+{
+	game->fps.fps = game->fps.frame_count * 4;  // Multiply by 4 = 1000ms/250ms
+	game->fps.frame_count = 0;
+	game->fps.fps_update_time = now;
+}
+```
+
+### FPS Statistics
+
+```c src/utils/render/hud/debug/fps.c
+voidender_debug_fps(t_game *game, t_ftm_image *canvas, t_coords coords)
+{
+	char	*fps;
+	char	*fps_min;
+	char	*fps_max;
+	char	*fps_limit;
+
+	fps = ft_strf("%d", game->fps.fps);
+	fps_min = ft_strf("Min: %d", game->fps.min);
+	fps_max = ft_strf("Max: %d", game->fps.max);
+	fps_limit = ft_strf("Limit: %d", game->fps.fps_limit);
+	// Render to screen...
+}
+```
+
+The HUD displays:
+- **Current FPS**: Real-time frame rate
+- **Min FPS**: Lowest recorded FPS (after 3s warmup)
+- **Max FPS**: Highest recorded FPS
+- **FPS Limit**: Target maximum frame rate
+
+## Multi-Threading Architecture
+
+### Rendering Threads
+
+Cub3D uses multi-threading for raycasting to improve performance:
+
+```c headers/cub3d.h
+#define CAMERA_THREADS 4
+```
+
+```c headers/cub3d.h
+struct s_game
+{
+	// ...
+	t_ftt_thread	*camera_threads[CAMERA_THREADS];
+};
+```
+
+### Thread Distribution
+
+Each thread renders a portion of the screen:
+
+```c src/utils/render/camera/walls/render.c
+void	render_walls(t_game *game, t_ftm_image *canvas, t_camera *camera)
+{
+	t_thread_render_rays_data			trrd[CAMERA_THREADS];
+	unsigned int						i;
+	unsigned int						index_scaler;
+
+	i = -1;
+	index_scaler = (camera->rays / CAMERA_THREADS);
+	
+	// Start all threads
+	while (++i < CAMERA_THREADS)
+	{
+		trrd[i].canvas = canvas;
+		trrd[i].camera = camera;
+		trrd[i].game = game;
+		trrd[i].start = index_scaler * i;
+		trrd[i].end = index_scaler * (i + 1);
+		game->camera_threads[i]->routine = thread_render_rays;
+		game->camera_threads[i]->data = &trrd[i];
+		ftt_thread_run(game->camera_threads[i]);
+	}
+	
+	// Wait for all threads to complete
+	i = -1;
+	while (++i < CAMERA_THREADS)
+		ftt_thread_wait(game->camera_threads[i]);
+}
+```
+
+<Info>
+  With 4 threads and 1024 rays:
+  - Thread 0: rays 0-255
+  - Thread 1: rays 256-511
+  - Thread 2: rays 512-767
+  - Thread 3: rays 768-1023
+</Info>
+
+### Thread Safety
+
+The main game state is protected by a mutex:
+
+```c headers/cub3d.h
+struct s_cub3d
+{
+	// ...
+	pthread_mutex_t		game_mutex;
+	t_game				*game;
+};
+```
+
+Critical sections are wrapped:
+
+```c src/utils/loop/loop.c
+pthread_mutex_lock(&cub3d()->game_mutex);
+// ... game updates and rendering ...
+pthread_mutex_unlock(&cub3d()->game_mutex);
+```
+
+## Entity Update System
+
+Every frame, all entities are updated:
+
+```c src/utils/loop/loop.c
+call_entity_frames(cub3d()->game, &cub3d()->game->fps);
+```
+
+This calls the `frame` function pointer for each entity, passing delta time:
+
+```c headers/cub3d.h
+struct s_entity
+{
+	void	(*frame)(t_game *game, t_entity *entity, double delta_time);
+	// ...
+};
+```
+
+Examples:
+- **Players**: Process input, update position
+- **Characters**: Run AI, update animations
+- **Doors**: Handle opening/closing animations
+- **Billboards**: Update sprite animations
+
+<Accordion title="Entity Frame Example">
+  ```c
+  void character_frame(t_game *game, t_entity *entity, double delta_time)
+  {
+      t_character *character = (t_character *)entity;
+      
+      // Update position based on velocity and delta time
+      entity->coords.x += character->velocity_x * delta_time;
+      entity->coords.y += character->velocity_y * delta_time;
+      
+      // Update animation
+      update_sprite(character->walking_sprite, delta_time);
+      
+      // Run AI logic
+      if (character->target_entity)
+          ai_pursue_target(character, delta_time);
+  }
+  ```
+</Accordion>
+
+## Spatial Optimization
+
+After entity updates, spatial data structures are refreshed:
+
+```c src/utils/loop/loop.c
+update_walls_matrix(cub3d()->game);
+update_billboards_vec(cub3d()->game);
+```
+
+### Walls Matrix
+
+A 2D grid for efficient raycasting:
+
+```c headers/cub3d.h
+t_entity	***walls;  // walls[y][x] = entity pointer
+```
+
+This allows O(1) lookup during DDA raycasting.
+
+### Billboards Array
+
+An array of all billboard entities for rendering:
+
+```c headers/cub3d.h
+t_entity	**billboards;  // Dynamic array
+```
+
+Billboards are sorted by distance for proper depth rendering.
+
+## Map Loading
+
+Maps are loaded asynchronously to prevent frame drops:
+
+```c src/utils/loop/loop.c
+static void	load_new_map(bool *playing_bg_music)
+{
+	t_time		load_start;
+	char		*path;
+
+	pthread_mutex_lock(&cub3d()->game_mutex);
+	path = ft_strdup(cub3d()->new_map_path);
+	cub3d()->new_map_path = NULL;
+	load_start = ft_get_time();
+	
+	// Clean up current game
+	(free_game(cub3d()->game), free_map(cub3d()->curr_map));
+	cub3d()->game = NULL;
+	cub3d()->curr_map = NULL;
+	fta_destroy();
+	
+	// Load new map
+	cub3d()->curr_map = parse_map_e(path);
+	(free(path), fte_assert(), fta_init_e());
+	cub3d()->game = game_new_e(cub3d()->window, cub3d()->curr_map);
+	
+	// Ensure minimum loading screen time
+	ft_sleep(ft_max(0, LOADING_MIN_LENGTH - (ft_get_time() - load_start)));
+	
+	*playing_bg_music = false;
+	pthread_mutex_unlock(&cub3d()->game_mutex);
+}
+```
+
+### Loading Screen
+
+```c headers/cub3d.h
+#define LOADING_MIN_LENGTH 1000  // Minimum 1 second
+```
+
+<Note>
+  The loading screen is displayed for at least 1 second, even if the map loads faster, to prevent jarring transitions.
+</Note>
+
+## Rendering Pipeline
+
+The rendering pipeline processes all players:
+
+```c src/utils/loop/loop.c
+render_players_game(cub3d()->game, cub3d()->window);
+```
+
+For each player:
+1. **Render camera view**: Raycasting for walls and billboards
+2. **Render HUD**: Health, ammo, minimap, debug info
+3. **Blit to screen**: Copy player canvas to window
+
+### Multi-Player Split Screen
+
+```c headers/cub3d.h
+#define PLAYER_MAX 4
+```
+
+The engine supports up to 4 players with split-screen:
+- 1 player: Full screen
+- 2 players: Vertical split
+- 3-4 players: Quadrant split
+
+Each player has their own canvas:
+
+```c headers/cub3d.h
+struct s_player
+{
+	t_character		character;
+	t_ftm_image		*canvas;  // Separate render target
+	// ...
+};
+```
+
+## Window Configuration
+
+```c headers/cub3d.h
+#define W_TITLE "cub3d"
+#ifndef W_WIDTH
+# define W_WIDTH 1024
+#endif
+#ifndef W_HEIGHT
+# define W_HEIGHT 768
+#endif
+```
+
+- **Default resolution**: 1024x768
+- **Title**: "cub3d"
+- Width and height can be overridden at compile time
+
+## Performance Considerations
+
+<Accordion title="Optimization Strategies">
+  1. **Multi-threading**: Raycasting split across 4 threads
+  2. **Spatial data structures**: O(1) wall lookups via 2D grid
+  3. **FPS limiting**: Prevents wasted CPU cycles
+  4. **Delta time**: Consistent simulation regardless of frame rate
+  5. **Entity culling**: Only active entities are updated
+  6. **Texture caching**: Sprites loaded once and reused
+  7. **Mutex protection**: Prevents race conditions in multi-threaded code
+</Accordion>
+
+## Game State Management
+
+The global game state is accessed via:
+
+```c headers/cub3d.h
+t_cub3d	*cub3d(void);
+```
+
+```c headers/cub3d.h
+struct s_cub3d
+{
+	t_ftm_image			*placeholder_image;
+	t_ftm_image			*loading_image;
+	char				*new_map_path;
+	t_map				*curr_map;
+	bool				started_map_load;
+	t_ftm_window		*window;
+	pthread_mutex_t		game_mutex;
+	t_game				*game;
+};
+```
+
+This singleton pattern provides global access to game state while maintaining thread safety.
+
+## Exit and Cleanup
+
+```c headers/cub3d.h
+void cub3d_exit(int code);
+```
+
+Proper cleanup sequence:
+1. Stop all threads
+2. Free game resources
+3. Destroy audio system
+4. Close window
+5. Exit with code
+
+## Related Topics
+
+- [Raycasting](/concepts/raycasting) - Multi-threaded rendering implementation
+- [Entities](/concepts/entities) - Entity frame update system
+- [Map Format](/concepts/map-format) - Map loading and parsing

@@ -1,0 +1,401 @@
+---
+title: 'Raycasting'
+description: 'DDA raycasting algorithm and transparency handling'
+---
+
+## Overview
+
+The raycasting system uses the Digital Differential Analyzer (DDA) algorithm to efficiently trace rays through a 2D grid and render a 3D perspective. It supports transparent entities and recursive raycasting for realistic rendering.
+
+## Ray Structures
+
+### t_raycast
+
+Result structure returned by the DDA algorithm.
+
+```c
+typedef struct s_raycast
+{
+    double      distance;
+    double      yaw;
+    void        *hit;
+    double      hit_x;
+    t_direction hit_direction;
+    t_coords    hit_coords;
+} t_raycast;
+```
+
+<ResponseField name="distance" type="double">
+  Perpendicular distance from camera to hit point (corrected for fisheye effect)
+</ResponseField>
+
+<ResponseField name="yaw" type="double">
+  Angle of the ray in degrees
+</ResponseField>
+
+<ResponseField name="hit" type="void*">
+  Pointer to the entity that was hit (`t_entity*`). NULL if no hit.
+</ResponseField>
+
+<ResponseField name="hit_x" type="double">
+  Horizontal position on the wall where ray hit (0.0 to 1.0). Used for texture mapping.
+</ResponseField>
+
+<ResponseField name="hit_direction" type="t_direction">
+  Cardinal direction of the wall face that was hit: NORTH, SOUTH, EAST, or WEST
+</ResponseField>
+
+<ResponseField name="hit_coords" type="t_coords">
+  Grid coordinates of the hit cell
+</ResponseField>
+
+### t_dda_raycast_config
+
+Configuration for initiating a raycast.
+
+```c
+typedef struct s_dda_raycast_config
+{
+    void        ***objs;
+    t_size      objs_size;
+    t_coords    start_pos;
+    void        *ignored_obj;
+} t_dda_raycast_config;
+```
+
+<ResponseField name="objs" type="void***">
+  2D array of entity pointers representing the game grid (`t_entity***`)
+</ResponseField>
+
+<ResponseField name="objs_size" type="t_size">
+  Dimensions of the grid (width and height)
+</ResponseField>
+
+<ResponseField name="start_pos" type="t_coords">
+  Starting position and direction of the ray (x, y, yaw)
+</ResponseField>
+
+<ResponseField name="ignored_obj" type="void*">
+  Entity to ignore during raycasting (typically the casting character). Can be NULL.
+</ResponseField>
+
+### t_dda_raycast_data
+
+Internal data structure for DDA algorithm execution.
+
+```c
+typedef struct s_dda_raycast_data
+{
+    double          length;
+    t_coords        rdir;
+    t_coords        deltadist;
+    t_coords        side_dist;
+    t_coords        pos;
+    t_coords        step;
+    int             side;
+    double          hit_x;
+    void            *hit;
+    void            ***objs;
+    t_size          objs_size;
+    t_direction     hitdir;
+    t_coords        sp;
+    void            *ignored_obj;
+} t_dda_raycast_data;
+```
+
+<ResponseField name="rdir" type="t_coords">
+  Ray direction vector
+</ResponseField>
+
+<ResponseField name="deltadist" type="t_coords">
+  Distance the ray travels between grid lines
+</ResponseField>
+
+<ResponseField name="side_dist" type="t_coords">
+  Distance to next vertical or horizontal grid line
+</ResponseField>
+
+<ResponseField name="pos" type="t_coords">
+  Current grid cell being checked
+</ResponseField>
+
+<ResponseField name="step" type="t_coords">
+  Direction to step in grid (+1 or -1 for x and y)
+</ResponseField>
+
+<ResponseField name="side" type="int">
+  Which side was hit (0 = vertical wall, 1 = horizontal wall)
+</ResponseField>
+
+## Core Function
+
+### ft_dda_raycast()
+
+Performs DDA raycasting to find the first wall intersection.
+
+```c
+t_raycast ft_dda_raycast(t_dda_raycast_config ddarc)
+```
+
+<ParamField path="ddarc" type="t_dda_raycast_config" required>
+  Configuration containing grid, start position, and ignored entity
+</ParamField>
+
+**Returns:** `t_raycast` structure with hit information
+
+**Algorithm:**
+1. Initialize ray direction from yaw angle
+2. Calculate step direction and initial side distances
+3. Loop through grid cells:
+   - Step to next grid line (X or Y)
+   - Check if current cell contains an entity
+   - Skip if entity is the ignored object
+   - Return hit data if solid entity found
+4. Stop if max ray length exceeded (FT_MAX_RAY_LENGTH = 150.0)
+5. Calculate final distance and texture coordinate
+
+**Source:** Implemented in ft_utils library (referenced in `ft_utils.h:253`)
+
+## Transparency System
+
+### Entity Transparency Flags
+
+```c
+struct s_entity
+{
+    bool    transparent;
+    bool    ultra_mega_transparent;
+    bool    no_transparency_for_bill;
+    // ... other fields
+};
+```
+
+<ResponseField name="transparent" type="bool">
+  Entity allows rays to pass through based on texture alpha. Uses `entity_x_is_transparent()` check.
+</ResponseField>
+
+<ResponseField name="ultra_mega_transparent" type="bool">
+  Entity is always transparent to rays (e.g., open doors, triggers)
+</ResponseField>
+
+<ResponseField name="no_transparency_for_bill" type="bool">
+  If true, this entity blocks billboards even if transparent to rays
+</ResponseField>
+
+### Recursive Raycasting
+
+Transparent walls require multiple raycasts from the same origin:
+
+```c
+typedef struct s_draw_ray_config
+{
+    t_ftm_image     *canvas;
+    t_camera        *camera;
+    t_game          *game;
+    t_coords        coords;
+    t_entity        *ignored_entity;
+    bool            add_distance;
+    double          previous_distance;
+    double          yaw;
+    unsigned int    i;
+} t_draw_ray_config;
+```
+
+**Recursive Algorithm:**
+```c
+static void draw_ray(t_draw_ray_config drc)
+{
+    // Cast ray
+    ray = ft_dda_raycast(drc);
+    
+    // Update total distance
+    ray.distance += drc.previous_distance;
+    
+    // If transparent, continue ray from hit point
+    if (entity_is_transparent(ray.hit, ray.hit_direction, ray.hit_x))
+    {
+        drc.coords = get_coords(&ray);  // New start position
+        drc.ignored_entity = ray.hit;   // Ignore this wall
+        drc.previous_distance = ray.distance;
+        draw_ray(drc);  // Recursive call
+    }
+    
+    // Draw this wall slice
+    draw_ray_line(canvas, camera, ray, i);
+}
+```
+
+**Source:** `src/utils/render/camera/walls/render.c:31`
+
+### entity_x_is_transparent()
+
+Checks if a specific point on an entity's texture is transparent.
+
+```c
+bool entity_x_is_transparent(t_entity *entity, t_direction direction, double x)
+```
+
+<ParamField path="entity" type="t_entity*" required>
+  Entity to check transparency for
+</ParamField>
+
+<ParamField path="direction" type="t_direction" required>
+  Which face was hit (NORTH, SOUTH, EAST, WEST)
+</ParamField>
+
+<ParamField path="x" type="double" required>
+  Horizontal position on the texture (0.0 to 1.0)
+</ParamField>
+
+**Returns:** true if the texture pixel at position x has alpha transparency
+
+## Ray Angle Calculation
+
+Calculating the yaw angle for each screen column:
+
+```c
+static double get_ray_yaw(t_draw_ray_config drc)
+{
+    double half_rays = drc.camera->rays / 2;
+    double dist_to_proj = half_rays / tan(ft_radians(drc.camera->fov) / 2);
+    double angle_adjustment = ft_degrees(atan((drc.i - half_rays) / dist_to_proj));
+    
+    return ft_normalize_angle(
+        drc.camera->character->billboard.entity.coords.yaw + angle_adjustment
+    );
+}
+```
+
+**Source:** `src/utils/render/camera/walls/render.c:60`
+
+**Explanation:**
+1. Calculate distance to projection plane using FOV
+2. Find angle offset for current ray index
+3. Add offset to character's viewing angle
+4. Normalize to 0-360 degrees
+
+## Raycasting Constants
+
+<ParamField path="FT_MAX_RAY_LENGTH" type="double" default="150.0">
+  Maximum distance a ray can travel before stopping. Defined in `ft_utils.h:30`.
+</ParamField>
+
+<ParamField path="PLAYER_RAYS_NO_HIT_LENGTH" type="double" default="50.0">
+  Default distance used when ray doesn't hit anything. Defined in `cub3d.h:57`.
+</ParamField>
+
+<ParamField path="FT_EPSILON" type="double" default="1e-9">
+  Small value for floating-point comparisons. Defined in `ft_utils.h:31`.
+</ParamField>
+
+## Coordinate System
+
+### t_coords
+
+```c
+typedef struct s_coords
+{
+    double  x;
+    double  y;
+    double  yaw;
+} t_coords;
+```
+
+<ResponseField name="x" type="double">
+  Horizontal position in grid space
+</ResponseField>
+
+<ResponseField name="y" type="double">
+  Vertical position in grid space
+</ResponseField>
+
+<ResponseField name="yaw" type="double">
+  Rotation angle in degrees (0 = North, 90 = East, 180 = South, 270 = West)
+</ResponseField>
+
+### t_direction
+
+Cardinal directions for wall faces.
+
+```c
+typedef enum s_direction
+{
+    NORTH,
+    SOUTH,
+    WEST,
+    EAST
+} t_direction;
+```
+
+## Fisheye Correction
+
+The DDA algorithm returns perpendicular distance, which is already corrected:
+
+```c
+// In billboard rendering:
+double distance = ft_distance(camera_coords, billboard_coords);
+double corrected_distance = distance * ft_cos_degrees(relative_angle);
+```
+
+This ensures that walls appear straight rather than curved.
+
+## Performance Optimization
+
+### Multi-Threading
+
+Ray casting is parallelized across CAMERA_THREADS:
+
+```c
+void render_walls(t_game *game, t_ftm_image *canvas, t_camera *camera)
+{
+    unsigned int index_scaler = camera->rays / CAMERA_THREADS;
+    
+    // Spawn threads
+    for (int i = 0; i < CAMERA_THREADS; i++) {
+        trrd[i].start = index_scaler * i;
+        trrd[i].end = index_scaler * (i + 1);
+        ftt_thread_run(game->camera_threads[i]);
+    }
+    
+    // Wait for completion
+    for (int i = 0; i < CAMERA_THREADS; i++)
+        ftt_thread_wait(game->camera_threads[i]);
+}
+```
+
+**Source:** `src/utils/render/camera/walls/render.c:95`
+
+### Grid-Based Lookup
+
+Entities are stored in a 2D grid for O(1) lookup:
+
+```c
+t_entity ***walls;  // game->walls[y][x]
+```
+
+The DDA algorithm steps through grid cells, checking only relevant entities.
+
+## Usage Example
+
+```c
+// Simple raycast example
+t_coords start = {player_x, player_y, player_angle};
+
+t_raycast result = ft_dda_raycast((t_dda_raycast_config){
+    .objs = (void***)game->walls,
+    .objs_size = game->map->size,
+    .start_pos = start,
+    .ignored_obj = (void*)player
+});
+
+if (result.hit) {
+    printf("Hit wall at distance: %f\n", result.distance);
+    printf("Wall direction: %d\n", result.hit_direction);
+    printf("Texture coordinate: %f\n", result.hit_x);
+}
+```
+
+## Related Topics
+
+- [Camera](/api/camera) - Multi-threaded rendering system
+- [Sprites](/api/sprites) - Texture and animation system

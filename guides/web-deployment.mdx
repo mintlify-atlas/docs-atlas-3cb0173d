@@ -1,0 +1,483 @@
+---
+title: Web Deployment
+description: Build and deploy Cub3D to the web using Emscripten and WebAssembly
+icon: globe
+---
+
+## Overview
+
+Cub3D can be compiled to WebAssembly (WASM) using Emscripten, allowing it to run in modern web browsers. The web version uses SDL2 compiled to JavaScript with full audio, graphics, and gamepad support.
+
+<Info>
+  See the live demo at [omelhorsite.pt/en/games/cub3d](https://omelhorsite.pt/en/games/cub3d)
+</Info>
+
+## Prerequisites
+
+### Install Emscripten
+
+Emscripten is required to compile C/C++ code to WebAssembly:
+
+<Steps>
+  <Step title="Download Emscripten SDK">
+    ```bash
+    git clone https://github.com/emscripten-core/emsdk.git
+    cd emsdk
+    ```
+  </Step>
+
+  <Step title="Install Latest Version">
+    ```bash
+    ./emsdk install latest
+    ./emsdk activate latest
+    ```
+  </Step>
+
+  <Step title="Set Environment Variables">
+    ```bash
+    source ./emsdk_env.sh
+    ```
+
+    Add this to your `~/.bashrc` or `~/.zshrc` to make it permanent:
+    ```bash
+    source "/path/to/emsdk/emsdk_env.sh"
+    ```
+  </Step>
+
+  <Step title="Verify Installation">
+    ```bash
+    emcc --version
+    ```
+
+    Should output something like:
+    ```
+    emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 3.1.x
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  For detailed installation instructions, see the [official Emscripten documentation](https://emscripten.org/docs/getting_started/downloads.html)
+</Tip>
+
+## Building for Web
+
+### Compile Command
+
+Use the dedicated Emscripten Makefile:
+
+```bash
+make -f emcc.Makefile
+```
+
+This generates three main files:
+
+<CardGroup cols={3}>
+  <Card title="cub3d.html" icon="file-code">
+    HTML shell and entry point
+  </Card>
+  <Card title="cub3d.js" icon="js">
+    JavaScript loader (~368KB)
+  </Card>
+  <Card title="cub3d.wasm" icon="cube">
+    WebAssembly binary (~1.7MB)
+  </Card>
+</CardGroup>
+
+Plus a data file:
+- **cub3d.data** - Preloaded assets (~12MB)
+
+## Emscripten Configuration
+
+The `emcc.Makefile` is specifically configured for web builds:
+
+### Compiler Settings
+
+```makefile
+CC = emcc
+CFLAGS = -Wall -Wextra -Werror -O3 -D W_WIDTH=400 -D W_HEIGHT=300
+```
+
+<Note>
+  The web build uses a smaller resolution (400x300) for better performance. You can adjust `W_WIDTH` and `W_HEIGHT` as needed.
+</Note>
+
+### Threading Configuration
+
+```makefile
+CFLAGS += -pthread
+LDLIBS += -s USE_PTHREADS=1 -s PTHREAD_POOL_SIZE=5
+```
+
+Enables multi-threading with a pool of 5 worker threads.
+
+### SDL2 Integration
+
+```makefile
+LDLIBS += -s USE_SDL=2
+```
+
+Uses Emscripten's SDL2 port, which translates SDL calls to WebGL and WebAudio.
+
+### Safety and Debugging
+
+```makefile
+LDLIBS += -s ASSERTIONS=1 -s SAFE_HEAP=1 -s STACK_OVERFLOW_CHECK=2
+```
+
+- **ASSERTIONS**: Runtime checks for common errors
+- **SAFE_HEAP**: Memory access validation
+- **STACK_OVERFLOW_CHECK**: Detects stack overflows
+
+<Warning>
+  These flags add runtime overhead. For production builds, consider disabling them:
+  ```makefile
+  LDLIBS += -s ASSERTIONS=0 -s SAFE_HEAP=0 -s STACK_OVERFLOW_CHECK=0
+  ```
+</Warning>
+
+### Asyncify
+
+```makefile
+LDLIBS += -s ASYNCIFY=1
+```
+
+Enables synchronous-looking code to work with asynchronous browser APIs.
+
+### Asset Preloading
+
+```makefile
+LDLIBS += --preload-file maps --preload-file assets/42lisboa
+LDLIBS += --preload-file assets/fonts --preload-file assets/sounds
+LDLIBS += --preload-file assets/textures --preload-file assets/wolf3d
+LDLIBS += --preload-file assets/pt/textures/dommiguelilow.bmp
+LDLIBS += --preload-file assets/pt/textures/portugal.bmp
+```
+
+Embeds game assets into the virtual filesystem (cub3d.data).
+
+<Info>
+  The `--preload-file` flag packages assets so they're available via normal file I/O in the WASM module.
+</Info>
+
+### Memory Configuration
+
+```makefile
+LDLIBS += -s INITIAL_MEMORY=268435456 -s STACK_SIZE=2MB
+```
+
+- **INITIAL_MEMORY**: 256MB initial heap
+- **STACK_SIZE**: 2MB stack per thread
+
+<Tip>
+  If you encounter "out of memory" errors, increase `INITIAL_MEMORY`:
+  ```makefile
+  -s INITIAL_MEMORY=536870912  # 512MB
+  ```
+</Tip>
+
+### ES6 Module Export
+
+```makefile
+LDLIBS += -s ENVIRONMENT='web,worker'
+LDLIBS += -s EXPORT_ES6=1 -s MODULARIZE=1
+```
+
+Exports as an ES6 module for modern JavaScript integration.
+
+### Custom HTML Shell
+
+```makefile
+LDLIBS += --shell-file minimal.html
+```
+
+Uses `minimal.html` as the template for the final HTML page.
+
+## Custom HTML Shell
+
+The `minimal.html` file provides the page structure. You can customize it:
+
+```html minimal.html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cub3D</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    canvas {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  {{{ SCRIPT }}}
+</body>
+</html>
+```
+
+<Note>
+  The `{{{ SCRIPT }}}` placeholder is replaced by Emscripten with the module loader code.
+</Note>
+
+## Local Testing
+
+### Python HTTP Server
+
+The project includes a simple server:
+
+```bash
+python3 server.py
+```
+
+This starts a local server (typically on `http://localhost:8000`) with proper MIME types and CORS headers.
+
+<Warning>
+  Opening `cub3d.html` directly via `file://` won't work due to:
+  - CORS restrictions on loading `.wasm` and `.data` files
+  - SharedArrayBuffer requiring specific headers
+</Warning>
+
+### Required Headers
+
+For SharedArrayBuffer support (needed for threading), serve with:
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+The included `server.py` handles this automatically.
+
+## Production Deployment
+
+### Build for Production
+
+1. **Optimize the build:**
+
+   ```makefile
+   CFLAGS = -Wall -Wextra -Werror -O3 -D W_WIDTH=1024 -D W_HEIGHT=768
+   LDLIBS += -s ASSERTIONS=0 -s SAFE_HEAP=0
+   ```
+
+2. **Build:**
+
+   ```bash
+   make -f emcc.Makefile
+   ```
+
+3. **Deploy these files:**
+   - `cub3d.html`
+   - `cub3d.js`
+   - `cub3d.wasm`
+   - `cub3d.data`
+
+### Server Configuration
+
+<Tabs>
+  <Tab title="Nginx">
+    ```nginx
+    server {
+        listen 80;
+        server_name your-domain.com;
+        root /var/www/cub3d;
+        index cub3d.html;
+
+        # Required for SharedArrayBuffer
+        add_header Cross-Origin-Opener-Policy same-origin;
+        add_header Cross-Origin-Embedder-Policy require-corp;
+
+        # Correct MIME types
+        types {
+            application/wasm wasm;
+            application/javascript js;
+            application/octet-stream data;
+        }
+
+        # Compression
+        gzip on;
+        gzip_types application/javascript application/wasm;
+    }
+    ```
+  </Tab>
+  <Tab title="Apache">
+    ```apache
+    <VirtualHost *:80>
+        ServerName your-domain.com
+        DocumentRoot /var/www/cub3d
+
+        <Directory /var/www/cub3d>
+            # Required for SharedArrayBuffer
+            Header set Cross-Origin-Opener-Policy "same-origin"
+            Header set Cross-Origin-Embedder-Policy "require-corp"
+
+            # Correct MIME types
+            AddType application/wasm .wasm
+            AddType application/javascript .js
+            AddType application/octet-stream .data
+        </Directory>
+
+        # Compression
+        <IfModule mod_deflate.c>
+            AddOutputFilterByType DEFLATE application/javascript
+            AddOutputFilterByType DEFLATE application/wasm
+        </IfModule>
+    </VirtualHost>
+    ```
+  </Tab>
+  <Tab title="Cloudflare Pages">
+    Create a `_headers` file:
+
+    ```
+    /*
+      Cross-Origin-Opener-Policy: same-origin
+      Cross-Origin-Embedder-Policy: require-corp
+
+    /*.wasm
+      Content-Type: application/wasm
+
+    /*.data
+      Content-Type: application/octet-stream
+    ```
+  </Tab>
+</Tabs>
+
+## Performance Optimization
+
+### Reduce Asset Size
+
+<Steps>
+  <Step title="Compress Textures">
+    Optimize BMP files or convert to WebP (requires code changes)
+  </Step>
+
+  <Step title="Limit Preloaded Assets">
+    Only include essential maps and textures:
+    ```makefile
+    LDLIBS += --preload-file maps/hub.cub
+    LDLIBS += --preload-file assets/textures
+    ```
+  </Step>
+
+  <Step title="Use Lazy Loading">
+    For large asset packs, implement runtime loading instead of preloading
+  </Step>
+</Steps>
+
+### Compilation Optimizations
+
+```makefile
+# Link-time optimization
+CFLAGS += -flto
+
+# Aggressive optimization (careful: may break some code)
+CFLAGS += -Oz  # Optimize for size
+
+# Closure compiler (advanced JS optimization)
+LDLIBS += --closure 1
+```
+
+<Warning>
+  Test thoroughly after enabling aggressive optimizations, as they can introduce subtle bugs.
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Black screen on load">
+    Check browser console for errors. Common causes:
+    - Missing COOP/COEP headers (required for SharedArrayBuffer)
+    - Failed to load .wasm or .data files (check network tab)
+    - CORS errors (use proper HTTP server, not file://)
+  </Accordion>
+
+  <Accordion title="Out of memory errors">
+    Increase heap size:
+    ```makefile
+    LDLIBS += -s INITIAL_MEMORY=536870912  # 512MB
+    LDLIBS += -s ALLOW_MEMORY_GROWTH=1     # Allow dynamic growth
+    ```
+  </Accordion>
+
+  <Accordion title="Audio not working">
+    Browsers require user interaction before playing audio. Add a "Click to Start" overlay.
+  </Accordion>
+
+  <Accordion title="Gamepad not detected">
+    - Ensure gamepad is connected before page loads
+    - Check browser gamepad support: [gamepad-tester.com](https://gamepad-tester.com)
+    - Press any button to wake up the gamepad
+  </Accordion>
+
+  <Accordion title="Slow performance">
+    - Reduce resolution (`W_WIDTH` and `W_HEIGHT`)
+    - Disable debug features (`ASSERTIONS`, `SAFE_HEAP`)
+    - Use `-O3` optimization
+    - Reduce thread count (`PTHREAD_POOL_SIZE`)
+  </Accordion>
+</AccordionGroup>
+
+## Browser Compatibility
+
+<Tabs>
+  <Tab title="Supported">
+    - Chrome/Edge 90+
+    - Firefox 90+
+    - Safari 15.2+
+    - Opera 76+
+  </Tab>
+  <Tab title="Required Features">
+    - WebAssembly
+    - SharedArrayBuffer
+    - WebGL 2.0
+    - WebAudio API
+    - Gamepad API (optional)
+  </Tab>
+</Tabs>
+
+## Makefile Targets
+
+<CodeGroup>
+```bash Build
+make -f emcc.Makefile
+# or
+make -f emcc.Makefile all
+```
+
+```bash Clean
+make -f emcc.Makefile clean
+# Removes web_obj/ and generated HTML/JS/WASM files
+```
+
+```bash Full Clean
+make -f emcc.Makefile fclean
+# Also removes miniaudio and other dependencies
+```
+
+```bash Rebuild
+make -f emcc.Makefile re
+# Equivalent to: make fclean && make
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Building Native" icon="hammer" href="/guides/building">
+    Build for Linux/macOS desktop
+  </Card>
+  <Card title="Controls" icon="gamepad" href="/guides/controls">
+    Learn keyboard and gamepad controls
+  </Card>
+</CardGroup>

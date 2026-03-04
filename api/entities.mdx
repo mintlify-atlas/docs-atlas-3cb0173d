@@ -1,0 +1,422 @@
+---
+title: 'Entities'
+description: 'Core entity system for managing game objects and their lifecycle'
+---
+
+## Overview
+
+The entity system provides the foundation for all interactive game objects including players, enemies, walls, doors, items, and billboards. Entities have frame callbacks, input handling, and a controller system for AI and player input.
+
+## Functions
+
+### entity_new()
+
+Creates a new base entity with default configuration.
+
+```c
+t_entity *entity_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  The game instance for accessing configuration and resources
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  The window instance (currently unused but passed for consistency)
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Single character identifier used to look up entity configuration in the map types
+</ParamField>
+
+<ResponseField name="return" type="t_entity *">
+  Pointer to the newly created entity, or NULL on allocation failure
+</ResponseField>
+
+#### Entity Initialization
+
+The function performs the following initialization:
+
+1. Allocates entity structure
+2. Sets entity type to `ENTITY`
+3. Assigns default callbacks (frame, clear, action, shot)
+4. Loads configuration from map types hashmap:
+   - `MAX_HEALTH` - Maximum health points (default: 100)
+   - `TARGETABLE` - Can be targeted by raycasts
+   - `TRANSPARENT` - Allows rays to pass through
+   - `ULTRA_MEGA_TRANSPARENT` - Complete transparency
+   - `NO_TRANSPARENCY_FOR_BILL` - Disables transparency for billboards
+   - `HARD` - Is solid/collidable (default: true)
+   - `CONTROLLER` - AI/input controller type
+   - `COLLISION` - Collision sound identifier
+5. Sets initial health to max health
+6. Sets active flag to true
+7. Sets default size to (1.0, 1.0)
+
+#### Usage Example
+
+```c
+// Creating a basic entity with identifier 'E'
+t_entity *entity = entity_new(game, window, 'E');
+if (!entity) {
+    // Handle allocation failure
+    return;
+}
+
+// Set entity position
+entity->coords = (t_coords){5.5, 3.2, 0};
+
+// Add to game entities list
+ft_list_add_back(&game->entities, entity);
+```
+
+<Note>
+  Most game objects use specialized entity types (t_player, t_wall, t_door, etc.) which internally call entity_new() or similar initialization.
+</Note>
+
+---
+
+### free_entity()
+
+Frees an entity and all its allocated resources.
+
+```c
+void free_entity(void *data);
+```
+
+<ParamField path="data" type="void *" required>
+  Pointer to the entity to free (cast from t_entity *)
+</ParamField>
+
+#### Cleanup Process
+
+1. Calls the entity's `clear()` callback to free type-specific data
+2. Frees the entity structure itself
+
+#### Usage Example
+
+```c
+// Removing and freeing an entity
+t_list *entity_node = find_entity_in_list(game->entities, entity);
+if (entity_node) {
+    ft_list_remove(&game->entities, entity_node, free_entity);
+}
+```
+
+<Warning>
+  Always ensure the entity is removed from all lists and references before freeing. The entity system uses this as a destructor callback in list operations.
+</Warning>
+
+---
+
+### call_entity_frames()
+
+Calls the frame update callback for all active entities.
+
+```c
+void call_entity_frames(t_game *game, t_fps *fps);
+```
+
+<ParamField path="game" type="t_game *" required>
+  The game instance containing the entities list
+</ParamField>
+
+<ParamField path="fps" type="t_fps *" required>
+  FPS tracker containing delta_time for frame-rate independent updates
+</ParamField>
+
+#### Behavior
+
+Iterates through all entities in `game->entities` and calls each entity's `frame()` callback with:
+- The game instance
+- The entity itself
+- Delta time in seconds since last frame
+
+The frame callback is defined as:
+```c
+void (*frame)(t_game *game, t_entity *entity, double delta_time);
+```
+
+#### Usage Example
+
+```c
+// From loop.c - Main game loop
+update_frame(game);  // Updates delta_time
+call_entity_frames(game, &game->fps);
+```
+
+#### Typical Frame Callback Uses
+
+- Update animation sprites
+- Process AI logic
+- Handle auto-close timers (doors)
+- Update character state machines
+- Process physics and movement
+
+---
+
+### call_entity_keys()
+
+Calls the key input callback for all active entities with controllers.
+
+```c
+void call_entity_keys(t_game *game, t_ftm_key_hook_values kvh);
+```
+
+<ParamField path="game" type="t_game *" required>
+  The game instance containing the entities list
+</ParamField>
+
+<ParamField path="kvh" type="t_ftm_key_hook_values" required>
+  Key hook values containing key code, state, and controller ID
+</ParamField>
+
+#### Behavior
+
+Iterates through all entities in `game->entities` and for each **active** entity that has a controller key callback, calls:
+
+```c
+entity->controller.key(game, entity, kvh);
+```
+
+The key callback is defined as:
+```c
+void (*key)(t_game *game, t_entity *entity, t_ftm_key_hook_values);
+```
+
+#### Usage Example
+
+```c
+// From loop.c - Key hook handler
+void key_hook(t_ftm_key_hook_values kvh)
+{
+    pthread_mutex_lock(&cub3d()->game_mutex);
+    if (cub3d()->game)
+        call_entity_keys(cub3d()->game, kvh);
+    pthread_mutex_unlock(&cub3d()->game_mutex);
+}
+```
+
+<Note>
+  Only entities with active=true and a non-NULL controller.key callback receive input events.
+</Note>
+
+---
+
+## Entity Structure
+
+### t_entity
+
+The base entity structure inherited by all game objects.
+
+```c
+struct s_entity
+{
+    void (*frame)(t_game *game, t_entity *entity, double delta_time);
+    void (*clear)(void *this);
+    void (*action)(t_entity *entity, t_character *actioner);
+    void (*shot)(t_entity *shooted, t_character *shooter);
+    
+    t_controller    controller;     // AI/input controller
+    
+    bool            targetable;     // Can be targeted by raycasts
+    bool            transparent;    // Semi-transparent rendering
+    bool            ultra_mega_transparent;  // Full transparency
+    bool            no_transparency_for_bill; // Force opaque billboards
+    
+    int             max_health;     // Maximum health points
+    int             health;         // Current health points
+    bool            invencible;     // Cannot take damage
+    
+    bool            hard;           // Is solid/collidable
+    bool            wall;           // Is a wall entity
+    bool            actionable;     // Can be activated
+    bool            billboard;      // Is a billboard sprite
+    bool            character;      // Is a character
+    
+    char            identifier;     // Map identifier character
+    bool            active;         // Is active and updating
+    
+    t_coords        coords;         // World position (x, y, z)
+    t_dsize         size;           // Collision size (width, height)
+    t_entity_type   type;           // Entity type enum
+    
+    t_fta_audio     *collision_sound;  // Sound on collision
+};
+```
+
+### Entity Callbacks
+
+<ParamField path="frame" type="function pointer">
+  Called every frame for updates. Receives game, entity, and delta_time.
+</ParamField>
+
+<ParamField path="clear" type="function pointer">
+  Called before freeing to clean up entity-specific resources. Does not free the base structure.
+</ParamField>
+
+<ParamField path="action" type="function pointer">
+  Called when a character interacts with this entity (e.g., use key). Receives the entity and the character performing the action.
+</ParamField>
+
+<ParamField path="shot" type="function pointer">
+  Called when this entity is shot by a character. Receives the entity and the shooter.
+  
+  Default implementation:
+  - Checks if shooter has a weapon equipped
+  - Checks if entity is invincible
+  - Reduces health by weapon damage
+  - Clamps health to [0, max_health]
+</ParamField>
+
+---
+
+## Entity Types
+
+### t_entity_type Enum
+
+```c
+enum e_entity_type
+{
+    ENTITY,              // Base entity
+    ENTITY_PLAYER,       // Player character
+    ENTITY_WALL,         // Wall/obstacle
+    ENTITY_DOOR,         // Door entity
+    ENTITY_BILLBOARD,    // Billboard sprite
+    ENTITY_DROP,         // Dropped item
+    ENTITY_CHARACTER,    // NPC character
+    ENTITY_ELEVATOR      // Level transition
+};
+```
+
+Each type has specialized structures that extend the base entity:
+
+- `t_player` extends `t_character` extends `t_billboard` extends `t_entity`
+- `t_wall` extends `t_entity`
+- `t_door` extends `t_wall` extends `t_entity`
+- `t_billboard` extends `t_entity`
+- `t_drop` extends `t_billboard` extends `t_entity`
+- `t_elevator` extends `t_wall` extends `t_entity`
+
+---
+
+## Controller System
+
+### t_controller
+
+Handles entity behavior and input.
+
+```c
+struct s_controller
+{
+    void (*key)(t_game *game, t_entity *entity, t_ftm_key_hook_values);
+    void (*frame)(t_game *game, t_entity *entity, double delta_time);
+    
+    // AI state tracking
+    t_time      last_shot;
+    t_time      last_strafe;
+    t_time      last_seen_target;
+    t_coords    last_target_position;
+    t_entity    *prev_target;
+    
+    // Movement state
+    bool        walking_forward;
+    bool        walking_left;
+    bool        walking_backward;
+    bool        walking_right;
+    bool        looking_right;
+    bool        looking_left;
+    bool        sprinting;
+    
+    // Action state
+    bool        action;
+    bool        already_actioned;
+    
+    // Configuration
+    double      mouse_look_velocity;
+    double      key_look_velocity;
+    double      walk_velocity;
+    double      sprint_velocity;
+    bool        keyboard_only;
+    
+    // AI pathfinding
+    double      prev_angle;
+    double      moving_to_angle;
+    double      optimal_proximity;
+    
+    // ... more fields
+};
+```
+
+---
+
+## Common Usage Patterns
+
+### Creating Custom Entities
+
+```c
+// Define custom entity type
+typedef struct s_custom_entity
+{
+    t_entity    entity;  // Must be first member
+    int         custom_data;
+    t_sprite    *custom_sprite;
+} t_custom_entity;
+
+// Custom frame callback
+void custom_entity_frame(t_game *game, t_entity *entity, double delta_time)
+{
+    t_custom_entity *custom = (t_custom_entity *)entity;
+    // Update custom logic
+    custom->custom_data += (int)(delta_time * 100);
+}
+
+// Creator function
+t_custom_entity *custom_entity_new(t_game *game, t_ftm_window *window, char id)
+{
+    t_custom_entity *custom = ft_calloc(1, sizeof(t_custom_entity));
+    if (!custom)
+        return NULL;
+    
+    // Initialize base entity
+    init_entity(game, window, &custom->entity, id);
+    
+    // Override callbacks
+    custom->entity.frame = custom_entity_frame;
+    
+    // Initialize custom fields
+    custom->custom_data = 0;
+    custom->custom_sprite = /* load sprite */;
+    
+    return custom;
+}
+```
+
+### Iterating Entities
+
+```c
+// Process all targetable entities
+t_list *curr = game->entities;
+while (curr) {
+    t_entity *entity = (t_entity *)curr->data;
+    
+    if (entity->active && entity->targetable) {
+        // Check if entity is in range
+        double dist = calculate_distance(player->coords, entity->coords);
+        if (dist < 5.0) {
+            // Do something with nearby targetable entity
+        }
+    }
+    
+    curr = curr->next;
+}
+```
+
+---
+
+## See Also
+
+- [Game](/api/game) - Game instance management
+- [Map](/api/map) - Entity spawning from maps
+- [Player](/api/player) - Player entity type
+- [Characters](/api/characters) - Character entity type

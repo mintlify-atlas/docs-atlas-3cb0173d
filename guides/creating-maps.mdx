@@ -1,0 +1,467 @@
+---
+title: Creating Custom Maps
+description: Complete guide to creating .cub map files with entities, textures, and configuration
+icon: map
+---
+
+## Map File Format
+
+Cub3D maps use the `.cub` format, which combines configuration directives with ASCII grid layouts. Maps are located in the `maps/` directory.
+
+## Basic Structure
+
+<Steps>
+  <Step title="Texture Configuration">
+    Define wall textures for each cardinal direction
+  </Step>
+  <Step title="Entity Definitions">
+    Configure doors, walls, and billboards with custom properties
+  </Step>
+  <Step title="Environment Settings">
+    Set colors, sounds, and gameplay parameters
+  </Step>
+  <Step title="Map Grid">
+    Draw the level layout using ASCII characters
+  </Step>
+</Steps>
+
+## Minimal Example
+
+Here's a simple working map:
+
+```txt maps/smol.cub
+NO assets/wolf3d/textures/grey-wall0.bmp
+SO assets/wolf3d/textures/purple-wall.bmp
+WE assets/wolf3d/textures/red-wall.bmp
+EA assets/wolf3d/textures/wood-wall.bmp
+
+F 50,50,50
+C 225,30,0
+
+111111
+1E00W1
+100001
+1E00W1
+111111
+```
+
+<Info>
+  **Required elements:**
+  - NO, SO, WE, EA texture paths
+  - F (floor) and C (ceiling) RGB colors
+  - Map grid with walls (1) and at least one player spawn (N/S/E/W)
+</Info>
+
+## Configuration Directives
+
+### Wall Textures
+
+Define default textures for wall faces:
+
+```txt
+NO assets/textures/north-wall.bmp
+SO assets/textures/south-wall.bmp
+WE assets/textures/west-wall.bmp
+EA assets/textures/east-wall.bmp
+```
+
+<Tip>
+  Textures support animated sprites using colon-separated paths:
+  ```txt
+  SO assets/textures/anim1.bmp:assets/textures/anim2.bmp:assets/textures/anim3.bmp
+  SO_UPDATE_DELAY 1
+  SO_LOOP TRUE
+  ```
+</Tip>
+
+### Environment Colors
+
+```txt
+F 46,39,30    # Floor color (RGB)
+C 67,63,1     # Ceiling color (RGB)
+```
+
+### Audio Configuration
+
+<CodeGroup>
+```txt Background Music
+BACKGROUND_SOUND assets/sounds/music.mp3
+BACKGROUND_SOUND_VOLUME 0.3
+BACKGROUND_SOUND_LOOP TRUE
+```
+
+```txt Collision Sound
+COLLISION_SOUND assets/wolf3d/sounds/hitwall.mp3
+COLLISION_SOUND_VOLUME 0.1
+```
+</CodeGroup>
+
+### Background Sprite
+
+Add a background texture (for skyboxes or distant scenery):
+
+```txt
+BACKGROUND_SPRITE assets/textures/sky.bmp
+```
+
+### Mouse Control
+
+Disable mouse look by default:
+
+```txt
+MOUSE FALSE
+```
+
+## Entity Identifiers
+
+Entities are placed in the map grid using single characters. Each identifier can be configured with properties.
+
+### Built-in Identifiers
+
+<Tabs>
+  <Tab title="Map Elements">
+    | Character | Type | Description |
+    |-----------|------|-------------|
+    | `0` | Air | Empty space (walkable) |
+    | `1` | Wall | Standard wall using default textures |
+    | Space | Air | Alternative to `0` |
+    | Tab | Air | Alternative to `0` |
+  </Tab>
+  <Tab title="Player Spawns">
+    | Character | Type | Description |
+    |-----------|------|-------------|
+    | `N` | Player | Spawns facing North |
+    | `S` | Player | Spawns facing South |
+    | `E` | Player | Spawns facing East |
+    | `W` | Player | Spawns facing West |
+  </Tab>
+</Tabs>
+
+### Custom Wall Types
+
+Define walls with specific textures:
+
+```txt
+3_TYPE WALL
+3_SO assets/pt/textures/salazar.bmp
+3_NO NULL
+3_WE NULL
+3_EA NULL
+```
+
+Use `3` in the map grid to place this wall.
+
+<Warning>
+  Setting a direction to `NULL` makes that face invisible/transparent.
+</Warning>
+
+### Door Configuration
+
+Doors can open and close with animations:
+
+```txt
+2_TYPE DOOR
+2_DIRECTION NORTH
+2_DOOR_SPRITE assets/wolf3d/textures/door.bmp
+2_SIDES assets/wolf3d/textures/door-frame.bmp
+2_OPEN_SOUND assets/wolf3d/sounds/opendoor.mp3
+2_CLOSE_SOUND assets/wolf3d/sounds/closedoor.mp3
+```
+
+Place `2` in the map grid to create a door.
+
+<Note>
+  Door direction (NORTH, SOUTH, EAST, WEST) determines the opening axis.
+</Note>
+
+### Billboard Entities
+
+Create 3D sprites that always face the player:
+
+```txt
+b_TYPE BILLBOARD
+b_SPRITE assets/textures/barrel.bmp
+b_Y_CENTERED TRUE
+```
+
+### Elevator Configuration
+
+Elevators transport players to different maps:
+
+```txt
+e_TYPE ELEVATOR
+e_MAP_PATH maps/level2.cub
+e_SO assets/textures/elevator.bmp
+```
+
+## Advanced Entity Properties
+
+### Entity Attributes
+
+<AccordionGroup>
+  <Accordion title="Health & Combat">
+    ```txt
+    c_TYPE CHARACTER
+    c_MAX_HEALTH 100
+    c_TARGETABLE TRUE
+    c_INVENCIBLE FALSE
+    ```
+  </Accordion>
+
+  <Accordion title="Transparency">
+    ```txt
+    w_TYPE WALL
+    w_TRANSPARENT TRUE
+    w_ULTRA_MEGA_TRANSPARENT TRUE
+    w_NO_TRANSPARENCY_FOR_BILL FALSE
+    ```
+  </Accordion>
+
+  <Accordion title="Interaction">
+    ```txt
+    d_TYPE DOOR
+    d_ACTIONABLE TRUE
+    d_ACTION_SOUND assets/sounds/action.mp3
+    ```
+  </Accordion>
+
+  <Accordion title="Collision">
+    ```txt
+    b_TYPE BILLBOARD
+    b_HARD TRUE  # Blocks movement
+    b_WALL TRUE  # Treated as solid wall
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Map Grid Layout
+
+The map grid defines the level geometry:
+
+```txt
+111111111111
+1000000000E1
+1011110111N1
+10100001S001
+1010610d0W01
+101111111101
+100000000001
+111111111111
+```
+
+### Grid Rules
+
+<CardGroup cols={2}>
+  <Card title="Closed Maps" icon="lock">
+    Maps must be surrounded by walls (1) or will fail validation
+  </Card>
+  <Card title="Player Spawn" icon="user">
+    At least one player spawn (N/S/E/W) is required
+  </Card>
+  <Card title="Spacing" icon="align-left">
+    Use spaces or tabs for empty cells, maintains alignment
+  </Card>
+  <Card title="Custom Entities" icon="cube">
+    Any configured identifier can be placed in the grid
+  </Card>
+</CardGroup>
+
+### Example Complex Map
+
+```txt
+        11111111111111p1s11131111
+        1000000000110000000000001
+        1011000001110000000000001
+        1001000000000000060002001
+111111111011000001110000000000001
+100000000011000001110111192911111
+11110111111111011100000010001
+11110111111111011101010010001
+11000000110101011100000010001
+10000000000000001100000010000
+1000000000000000110101001001
+11000001110101011101011110N0111
+11110111 1110101 101110000001
+11111111 1111111 101110111111
+```
+
+<Info>
+  This example uses:
+  - Multiple custom wall types (p, s, 3, 9)
+  - Doors (2, 6)
+  - Player spawn (N)
+  - Empty spaces for room layout
+</Info>
+
+## Player Configuration
+
+Configure player starting inventory and stats:
+
+```txt
+MAX_HEALTH 100
+AMMO 8
+0_INVENTORY P  # Item 'P' in slot 0
+1_INVENTORY K  # Item 'K' in slot 1
+DROP_ITEMS TRUE
+FRIENDLY_FIRE FALSE
+```
+
+## Item System
+
+### Defining Items
+
+Items can be weapons or collectibles:
+
+```txt
+# Weapon
+P_TYPE WEAPON
+P_NAME "Pistol"
+P_DAMAGE 10
+P_RANGE 10.0
+P_AMMO_USAGE 1
+P_USE_SOUND assets/sounds/gunshot.mp3
+P_ICON assets/icons/pistol.bmp
+
+# Collectible
+H_TYPE COLLECTIBLE
+H_NAME "Health Pack"
+H_HEALTH 25
+H_GET_SOUND assets/sounds/health.mp3
+```
+
+### Drop Configuration
+
+Place items in the world:
+
+```txt
+h_TYPE DROP
+h_ITEM H  # References the 'H' item definition
+h_AUTO_PICKUP TRUE
+```
+
+## Character Entities
+
+Create NPCs with AI:
+
+```txt
+z_TYPE CHARACTER
+z_CONTROLLER ENEMY  # AI types: PLAYER, AI_DUMB, ENEMY
+z_MAX_HEALTH 50
+z_SPRITE assets/textures/enemy.bmp
+z_DEATH_SPRITE assets/textures/enemy-dead.bmp
+z_HIT_SPRITE assets/textures/enemy-hurt.bmp
+z_DEATH_SOUND assets/sounds/death.mp3
+z_HIT_SOUND assets/sounds/hit.mp3
+```
+
+## Constants and Defaults
+
+These constants are defined in `headers/cub3d.h:cub3d.h`:
+
+```c
+// Window
+#define W_WIDTH 1024
+#define W_HEIGHT 768
+
+// Player
+#define PLAYER_FOV 66.0
+#define PLAYER_WALK_VELOCITY 4.0
+#define PLAYER_SPRINT_VELOCITY 6.0
+#define PLAYER_MOUSE_LOOK_VELOCITY 20.0
+#define PLAYER_KEY_LOOK_VELOCITY 180.0
+
+// Map Defaults
+#define DEFAULT_MAP_PATH "maps/hub.cub"
+#define DEFAULT_AIR_TYPES "0 \t\n\v\f\r"
+#define DEFAULT_WALL_TYPES "1"
+#define DEFAULT_PLAYER_TYPES "NSEW"
+
+// Billboard
+#define BILLBOARD_WIDTH 0.23
+#define BILLBOARD_HEIGHT 0.23
+
+// Door
+#define DOOR_ANIMATION_FPS 6
+```
+
+## Testing Your Map
+
+<Steps>
+  <Step title="Save the map file">
+    Place your `.cub` file in the `maps/` directory
+  </Step>
+
+  <Step title="Run the game">
+    ```bash
+    ./cub3d maps/yourmap.cub
+    ```
+  </Step>
+
+  <Step title="Debug with HUD">
+    Press F3 to toggle debug info showing FPS and coordinates
+  </Step>
+</Steps>
+
+## Map Examples
+
+<CardGroup cols={2}>
+  <Card title="Simple Test" icon="vial">
+    **maps/smol.cub** - Minimal 6x5 map for testing
+  </Card>
+  <Card title="Subject Map" icon="book">
+    **maps/subject.cub** - Original 42 project requirements
+  </Card>
+  <Card title="Hub World" icon="house">
+    **maps/hub.cub** - Main menu/hub area
+  </Card>
+  <Card title="Wolfenstein" icon="skull">
+    **maps/e1m1.cub** - Complete FPS level with enemies
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Map validation fails">
+    Common issues:
+    - Map not enclosed by walls (1)
+    - Missing required directives (NO/SO/WE/EA/F/C)
+    - Invalid RGB color format (must be `R,G,B`)
+    - Missing player spawn point
+  </Accordion>
+
+  <Accordion title="Textures not loading">
+    Check:
+    - File paths are relative to project root
+    - BMP files are in correct format (24-bit uncompressed)
+    - File paths have no typos
+    - Files exist at specified locations
+  </Accordion>
+
+  <Accordion title="Doors not working">
+    Ensure:
+    - `_TYPE DOOR` is set
+    - Direction is specified (NORTH/SOUTH/EAST/WEST)
+    - Door sprite exists
+    - Identifier is placed in map grid correctly
+  </Accordion>
+
+  <Accordion title="Entities not appearing">
+    Verify:
+    - Entity type is defined with `_TYPE`
+    - Required properties are set (e.g., `_SPRITE` for billboards)
+    - Identifier matches between definition and grid
+    - Entity is not off-screen or behind walls
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Building" icon="hammer" href="/guides/building">
+    Learn how to compile and run your custom maps
+  </Card>
+  <Card title="Controls" icon="gamepad" href="/guides/controls">
+    Master the game controls for testing
+  </Card>
+</CardGroup>

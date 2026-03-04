@@ -1,0 +1,692 @@
+---
+title: "Items & Weapons Reference"
+description: "Technical reference for the item system, weapons, and collectibles"
+---
+
+## Item System Overview
+
+The item system provides weapons, collectibles, and consumables that characters can hold in their inventory and use. Items integrate with the entity system through the `t_drop` entity type.
+
+## Item Type Hierarchy
+
+```
+t_item (base)
+├── t_weapon (melee/ranged weapons)
+└── t_collectible (health/ammo/score pickups)
+```
+
+## Core Structures
+
+### Base Item
+
+The foundational item structure.
+
+```c
+struct s_item {
+    // Lifecycle methods
+    void (*frame)(t_item *item);
+    void (*clear)(void *this);
+    
+    // Interaction methods
+    void (*use)(t_item *item, t_drop *drop);
+    void (*drop)(t_game *, t_ftm_window *, t_item *, t_character *dropper);
+    
+    // Identity
+    char identifier;         // Map character for this item
+    char *name;              // Display name
+    char *description;       // Tooltip/description
+    
+    // Type flags
+    bool weapon;             // Is a weapon
+    bool collectible;        // Is a collectible
+    bool can_use;            // Can be used (has use() function)
+    bool single_use;         // Consumed on use
+    
+    // User
+    t_character *user;       // Character holding this item
+    
+    // Usage state
+    bool prev_using;         // Was being used last frame
+    bool already_using;      // Currently in use
+    t_time use_delay;        // Milliseconds between uses
+    t_time last_use;         // Last use timestamp
+    
+    // Audio
+    t_fta_audio *cant_sound;           // Sound when can't use
+    t_time last_cant_use_sound_play;   // Debounce cant_sound
+    t_fta_audio *use_sound;            // Sound when used
+    t_fta_audio *get_sound;            // Sound when picked up
+    
+    // Sprites
+    t_sprite *icon_use_sprite;    // Inventory icon when in use
+    t_sprite *_icon_sprite;       // Original icon reference
+    t_sprite *icon_sprite;        // Current inventory icon
+    t_sprite *screen_use_sprite;  // First-person view when using
+    t_sprite *screen_sprite;      // First-person view idle
+    t_sprite *_screen_sprite;     // Original screen sprite reference
+};
+```
+
+<ParamField path="frame" type="function">
+  Called every frame to update item state (animations, cooldowns).
+  
+  **Signature**: `void (*frame)(t_item *item)`
+</ParamField>
+
+<ParamField path="use" type="function">
+  Called when the item is used (left click / shoot button).
+  
+  **Signature**: `void (*use)(t_item *item, t_drop *drop)`
+  
+  - `item`: The item being used
+  - `drop`: Associated world drop (if any, can be NULL)
+  
+  <Tip>
+    For weapons, this function handles shooting logic. For collectibles, it applies health/ammo effects.
+  </Tip>
+</ParamField>
+
+<ParamField path="drop" type="function">
+  Creates a world drop when the item is dropped from inventory.
+  
+  **Signature**: `void (*drop)(t_game *game, t_ftm_window *window, t_item *item, t_character *dropper)`
+</ParamField>
+
+<ParamField path="identifier" type="char">
+  Single character identifying this item type in map files and asset paths.
+  
+  Example: `'P'` for pistol, `'H'` for health pack
+</ParamField>
+
+### Weapon
+
+Weapons deal damage and consume ammo.
+
+```c
+struct s_weapon {
+    t_item item;        // Inherits from item
+    
+    int damage;         // Damage per hit
+    double range;       // Maximum effective range
+    int ammo_usage;     // Ammo consumed per use
+};
+```
+
+**Constructor**: `t_weapon *weapon_new(t_game *game, t_ftm_window *window, char identifier)`
+
+<ParamField path="damage" type="int">
+  Health points subtracted from target on hit.
+  
+  ```c
+  // Example: Pistol does 10 damage
+  weapon->damage = 10;
+  ```
+</ParamField>
+
+<ParamField path="range" type="double">
+  Maximum distance the weapon can hit targets.
+  
+  ```c
+  // Example: Melee weapon with 1.5 unit range
+  weapon->range = 1.5;
+  ```
+  
+  <Info>
+    Infinite range can be achieved by setting this to `PLAYER_RAYS_NO_HIT_LENGTH`.
+  </Info>
+</ParamField>
+
+<ParamField path="ammo_usage" type="int">
+  Ammo consumed per shot. The weapon cannot be used if `user->ammo < ammo_usage`.
+  
+  ```c
+  // Example: Shotgun uses 2 ammo per shot
+  weapon->ammo_usage = 2;
+  ```
+</ParamField>
+
+### Collectible
+
+Consumables that grant health, ammo, or score.
+
+```c
+struct s_collectible {
+    t_item item;    // Inherits from item
+    
+    int health;     // Health points restored
+    int score;      // Score points awarded
+    int ammo;       // Ammo granted
+};
+```
+
+**Constructor**: `t_collectible *collectible_new(t_game *game, t_ftm_window *window, char identifier)`
+
+<ParamField path="health" type="int">
+  Health points added to the user's health (capped at `max_health`).
+  
+  ```c
+  // Example: Medkit restores 25 HP
+  collectible->health = 25;
+  ```
+</ParamField>
+
+<ParamField path="score" type="int">
+  Score points added to the user's total score.
+  
+  ```c
+  // Example: Coin worth 100 points
+  collectible->score = 100;
+  ```
+</ParamField>
+
+<ParamField path="ammo" type="int">
+  Ammo added to the user's ammo pool.
+  
+  ```c
+  // Example: Ammo box grants 20 rounds
+  collectible->ammo = 20;
+  ```
+</ParamField>
+
+## Item Lifecycle
+
+### Creation
+
+```c
+// Create item from identifier
+t_item *item = item_new(game, window, 'P');  // Pistol
+
+// Or create specific type
+t_weapon *weapon = weapon_new(game, window, 'R');  // Rifle
+t_collectible *health = collectible_new(game, window, 'H');  // Health pack
+```
+
+### Adding to Inventory
+
+```c
+bool add_item_to_inventory(t_character *character, t_item *item) {
+    // Find first empty slot
+    for (int i = 0; i < INVENTORY_SIZE; i++) {
+        if (character->inventory[i] == NULL) {
+            character->inventory[i] = item;
+            item->user = character;
+            
+            // Play pickup sound
+            if (item->get_sound)
+                play_audio(item->get_sound);
+            
+            return true;
+        }
+    }
+    
+    return false;  // Inventory full
+}
+```
+
+### Using Items
+
+```c
+void use_current_item(t_character *character) {
+    t_item *item = character->inventory[character->inventory_index];
+    
+    if (!item || !item->can_use)
+        return;
+    
+    // Check cooldown
+    t_time now = get_time();
+    if (now - item->last_use < item->use_delay) {
+        // Play "can't use" sound if available
+        if (item->cant_sound && 
+            now - item->last_cant_use_sound_play > 500) {
+            play_audio(item->cant_sound);
+            item->last_cant_use_sound_play = now;
+        }
+        return;
+    }
+    
+    // Use the item
+    if (item->use) {
+        item->use(item, character->drop);
+        item->last_use = now;
+        
+        // Play use sound
+        if (item->use_sound)
+            play_audio(item->use_sound);
+        
+        // Remove if single-use
+        if (item->single_use) {
+            character->inventory[character->inventory_index] = NULL;
+            free_item(item);
+        }
+    }
+}
+```
+
+### Dropping Items
+
+```c
+void drop_current_item(t_character *character, t_game *game, 
+                       t_ftm_window *window) {
+    t_item *item = character->inventory[character->inventory_index];
+    
+    if (!item)
+        return;
+    
+    // Create drop in world
+    if (item->drop) {
+        item->drop(game, window, item, character);
+    }
+    
+    // Remove from inventory
+    character->inventory[character->inventory_index] = NULL;
+}
+```
+
+## Weapon Implementation
+
+### Weapon Use Pattern
+
+```c
+void weapon_use(t_item *item, t_drop *drop) {
+    t_weapon *weapon = (t_weapon *)item;
+    t_character *user = item->user;
+    
+    // Check ammo
+    if (user->ammo < weapon->ammo_usage) {
+        // Play empty sound
+        if (item->cant_sound)
+            play_audio(item->cant_sound);
+        return;
+    }
+    
+    // Consume ammo
+    user->ammo -= weapon->ammo_usage;
+    
+    // Find target via raycast
+    t_entity *target = user->target_entity;
+    
+    if (target && target->targetable) {
+        // Check range
+        double distance = distance_between(user, target);
+        if (distance <= weapon->range) {
+            // Deal damage
+            if (target->shot) {
+                target->shot(target, user);
+            }
+        }
+    }
+    
+    // Play firing animation
+    set_sprite(&user->using_sprite, user->character.using_sprite);
+    set_sprite(&item->screen_sprite, item->screen_use_sprite);
+}
+```
+
+### Weapon Configuration Example
+
+<Tabs>
+  <Tab title="Pistol">
+    ```c
+    void init_pistol(t_weapon *weapon) {
+        weapon->item.identifier = 'P';
+        weapon->item.name = "Pistol";
+        weapon->item.description = "Standard sidearm";
+        weapon->item.weapon = true;
+        weapon->item.can_use = true;
+        weapon->item.use_delay = 500;     // 500ms between shots
+        
+        weapon->damage = 10;
+        weapon->range = 50.0;              // Very long range
+        weapon->ammo_usage = 1;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Shotgun">
+    ```c
+    void init_shotgun(t_weapon *weapon) {
+        weapon->item.identifier = 'S';
+        weapon->item.name = "Shotgun";
+        weapon->item.description = "Close-range powerhouse";
+        weapon->item.weapon = true;
+        weapon->item.can_use = true;
+        weapon->item.use_delay = 1000;    // 1 second between shots
+        
+        weapon->damage = 50;
+        weapon->range = 8.0;               // Short range
+        weapon->ammo_usage = 2;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Knife">
+    ```c
+    void init_knife(t_weapon *weapon) {
+        weapon->item.identifier = 'K';
+        weapon->item.name = "Knife";
+        weapon->item.description = "Melee weapon";
+        weapon->item.weapon = true;
+        weapon->item.can_use = true;
+        weapon->item.use_delay = 300;     // Fast attack speed
+        
+        weapon->damage = 30;
+        weapon->range = 1.2;               // Melee range
+        weapon->ammo_usage = 0;            // No ammo needed
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Collectible Implementation
+
+### Collectible Use Pattern
+
+```c
+void collectible_use(t_item *item, t_drop *drop) {
+    t_collectible *collectible = (t_collectible *)item;
+    t_character *user = item->user;
+    
+    // Apply health
+    if (collectible->health > 0) {
+        user->billboard.entity.health = min(
+            user->billboard.entity.health + collectible->health,
+            user->billboard.entity.max_health
+        );
+    }
+    
+    // Apply ammo
+    if (collectible->ammo > 0) {
+        user->ammo += collectible->ammo;
+    }
+    
+    // Apply score
+    if (collectible->score > 0) {
+        user->score += collectible->score;
+    }
+    
+    // If this is a world drop, deactivate it
+    if (drop) {
+        drop->billboard.entity.active = false;
+    }
+}
+```
+
+### Collectible Configuration Examples
+
+<AccordionGroup>
+  <Accordion title="Health Pack">
+    ```c
+    void init_health_pack(t_collectible *collectible) {
+        collectible->item.identifier = 'H';
+        collectible->item.name = "Health Pack";
+        collectible->item.description = "Restores 25 HP";
+        collectible->item.collectible = true;
+        collectible->item.can_use = true;
+        collectible->item.single_use = true;  // Consumed on use
+        
+        collectible->health = 25;
+        collectible->ammo = 0;
+        collectible->score = 0;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Ammo Box">
+    ```c
+    void init_ammo_box(t_collectible *collectible) {
+        collectible->item.identifier = 'A';
+        collectible->item.name = "Ammo Box";
+        collectible->item.description = "20 rounds";
+        collectible->item.collectible = true;
+        collectible->item.can_use = true;
+        collectible->item.single_use = true;
+        
+        collectible->health = 0;
+        collectible->ammo = 20;
+        collectible->score = 0;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Treasure">
+    ```c
+    void init_treasure(t_collectible *collectible) {
+        collectible->item.identifier = 'T';
+        collectible->item.name = "Treasure";
+        collectible->item.description = "Worth 500 points";
+        collectible->item.collectible = true;
+        collectible->item.can_use = true;
+        collectible->item.single_use = true;
+        
+        collectible->health = 0;
+        collectible->ammo = 0;
+        collectible->score = 500;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Mega Pack">
+    ```c
+    void init_mega_pack(t_collectible *collectible) {
+        collectible->item.identifier = 'M';
+        collectible->item.name = "Mega Pack";
+        collectible->item.description = "Full restore";
+        collectible->item.collectible = true;
+        collectible->item.can_use = true;
+        collectible->item.single_use = true;
+        
+        collectible->health = 100;  // Full health
+        collectible->ammo = 50;     // Lots of ammo
+        collectible->score = 100;   // Bonus points
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Item-Entity Integration
+
+### World Drops
+
+Items placed in the world use the `t_drop` entity:
+
+```c
+struct s_drop {
+    t_billboard billboard;   // Renders item sprite
+    t_item *item;            // Item contained
+    t_item *prev_item;       // For animation
+    bool auto_use;           // Use immediately on pickup
+    bool auto_pickup;        // Pick up on contact
+};
+```
+
+**Example**: Automatic health pack pickup
+
+```c
+void drop_frame(t_game *game, t_entity *entity, double delta_time) {
+    t_drop *drop = (t_drop *)entity;
+    
+    if (!drop->auto_pickup)
+        return;
+    
+    // Check for nearby players
+    t_list *current = game->entities;
+    while (current) {
+        t_entity *e = (t_entity *)current->data;
+        
+        if (e->character) {
+            t_character *character = (t_character *)e;
+            
+            // Check distance
+            double dist = distance_between(entity, e);
+            if (dist < 0.5) {  // Within pickup range
+                // Add to inventory or use immediately
+                if (drop->auto_use) {
+                    drop->item->use(drop->item, drop);
+                    entity->active = false;  // Remove drop
+                } else {
+                    if (add_item_to_inventory(character, drop->item)) {
+                        entity->active = false;
+                    }
+                }
+            }
+        }
+        
+        current = current->next;
+    }
+}
+```
+
+## Inventory Management
+
+### Inventory Structure
+
+```c
+struct s_character {
+    // ...
+    t_item *inventory[INVENTORY_SIZE];  // 9 slots (0-8)
+    int inventory_index;                 // Currently selected (0-8)
+    // ...
+};
+```
+
+### Inventory Navigation
+
+```c
+void scroll_inventory(t_character *character, int direction) {
+    t_time now = get_time();
+    
+    // Check scroll cooldown
+    if (now - character->last_inventory_scroll < INVENTORY_SCROLL_DELAY * 1000)
+        return;
+    
+    // Update index with wrapping
+    character->inventory_index += direction;
+    
+    if (character->inventory_index < 0)
+        character->inventory_index = INVENTORY_SIZE - 1;
+    else if (character->inventory_index >= INVENTORY_SIZE)
+        character->inventory_index = 0;
+    
+    character->last_inventory_scroll = now;
+}
+```
+
+### Inventory Rendering
+
+Inventory icons are rendered in the HUD:
+
+```c
+void render_inventory(t_game *game, t_ftm_image *canvas, t_character *character) {
+    int slot_width = 64;
+    int start_x = (canvas->width - (INVENTORY_SIZE * slot_width)) / 2;
+    int y = canvas->height - 80;
+    
+    for (int i = 0; i < INVENTORY_SIZE; i++) {
+        int x = start_x + (i * slot_width);
+        
+        // Draw slot background
+        bool selected = (i == character->inventory_index);
+        draw_inventory_slot(canvas, x, y, selected);
+        
+        // Draw item icon
+        t_item *item = character->inventory[i];
+        if (item && item->icon_sprite) {
+            t_ftm_image *icon = get_sprite_image(item->icon_sprite);
+            draw_image(canvas, icon, x + 8, y + 8);
+        }
+    }
+}
+```
+
+## Item Factory Pattern
+
+Items are created via factory functions:
+
+```c
+// headers/cub3d.h:539-546
+t_item *item_new(t_game *game, t_ftm_window *window, char identifier);
+t_collectible *collectible_new(t_game *game, t_ftm_window *window, 
+                               char identifier);
+t_weapon *weapon_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+Factory registration:
+
+```c
+// Register item constructors by identifier
+hashmap_insert(item_types, "P", weapon_new);      // Pistol
+hashmap_insert(item_types, "H", collectible_new); // Health pack
+hashmap_insert(item_types, "A", collectible_new); // Ammo
+```
+
+## Utility Functions
+
+<CodeGroup>
+
+```c src/utils/items/items.h:18-25
+// Item lifecycle
+void init_item(t_game *game, t_ftm_window *window, t_item *item, 
+               char identifier);
+void clear_collectible(void *data);
+void item_use(t_item *item, t_drop *drop);
+void item_drop(t_game *game, t_ftm_window *window, t_item *item,
+               t_character *dropper);
+void item_frame(t_item *item);
+```
+
+```c src/utils/items/items.h:27-34
+// Collectible functions
+void clear_item(void *data);
+void collectible_frame(t_item *item);
+void collectible_use(t_item *item, t_drop *drop);
+void collectible_drop(t_game *game, t_ftm_window *window, t_item *item,
+                      t_character *dropper);
+void init_collectible(t_game *game, t_ftm_window *window,
+                      t_collectible *collectible, char identifier);
+```
+
+```c src/utils/items/items.h:36-43
+// Weapon functions
+void clear_weapon(void *data);
+void weapon_frame(t_item *item);
+void weapon_use(t_item *item, t_drop *drop);
+void weapon_drop(t_game *game, t_ftm_window *window, t_item *item,
+                 t_character *dropper);
+void init_weapon(t_game *game, t_ftm_window *window, t_weapon *weapon,
+                 char identifier);
+```
+
+```c headers/cub3d.h:540
+// Item cleanup
+void free_item(void *data);
+```
+
+</CodeGroup>
+
+## Best Practices
+
+<Card title="Item Design" icon="lightbulb">
+  - **Balance**: Powerful weapons should have higher ammo consumption
+  - **Single-use**: Collectibles should be `single_use = true`
+  - **Cooldowns**: Set appropriate `use_delay` to prevent spam
+  - **Feedback**: Always provide audio/visual feedback for item actions
+</Card>
+
+<Card title="Performance" icon="gauge">
+  - Items are lightweight - avoid heavy processing in `frame()`
+  - Use hashmaps for item lookup, not linear searches
+  - Cache sprite references instead of loading each frame
+</Card>
+
+<Card title="User Experience" icon="heart">
+  - Clear item names and descriptions
+  - Distinctive icons for easy identification
+  - Appropriate sound effects for pickup/use
+  - Visual feedback when item can't be used (out of ammo, on cooldown)
+</Card>
+
+## See Also
+
+- [Entities API](/reference/entities-api) - `t_drop` entity and `t_character` inventory
+- [Configuration Reference](/reference/configuration) - `INVENTORY_SIZE` and related constants
+- [Architecture Overview](/reference/architecture) - Item system integration with game loop

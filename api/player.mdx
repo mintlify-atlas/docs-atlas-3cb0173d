@@ -1,0 +1,201 @@
+---
+title: 'Player'
+description: 'Player entity creation and configuration'
+---
+
+## Overview
+
+The Player is a specialized character entity that represents a playable character in the game. Players can be controlled via keyboard/mouse or gamepad, render to individual canvases, and support split-screen multiplayer.
+
+## Function Reference
+
+### player_new()
+
+Creates and initializes a new player entity.
+
+```c
+t_player *player_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  Pointer to the game instance
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  Pointer to the window instance
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Character identifier for configuration lookup. Valid values: `'N'`, `'S'`, `'E'`, `'W'` for spawn direction
+</ParamField>
+
+<ResponseField name="return" type="t_player *">
+  Pointer to the newly created player, or `NULL` on allocation failure
+</ResponseField>
+
+## Structure Definition
+
+### s_player
+
+The player structure extends `t_character` with rendering and controller properties.
+
+```c
+struct s_player
+{
+    t_character      character;
+    t_ftm_image      *canvas;
+    t_coords         last_canvas_pos;
+    int              controller_id;
+    bool             friendly_fire;
+};
+```
+
+<ResponseField name="character" type="t_character">
+  Base character data (see [Characters](/api/characters))
+</ResponseField>
+
+<ResponseField name="canvas" type="t_ftm_image *">
+  Individual render canvas for this player (split-screen support)
+</ResponseField>
+
+<ResponseField name="last_canvas_pos" type="t_coords">
+  Last recorded canvas position for rendering optimization
+</ResponseField>
+
+<ResponseField name="controller_id" type="int">
+  Controller identifier for input mapping
+</ResponseField>
+
+<ResponseField name="friendly_fire" type="bool">
+  Whether this player can damage other players. Configurable via map type `FRIENDLY_FIRE`
+</ResponseField>
+
+## Configuration
+
+Players are configured through map type identifiers. The following constants define player behavior:
+
+### Player Constants
+
+```c
+#define PLAYER_RAYS_NO_HIT_LENGTH 50.0
+#define PLAYER_FOV 66.0
+#define PLAYER_RAY_SUBRAYS 5
+#define PLAYER_MOUSE_LOOK_VELOCITY 20.0
+#define PLAYER_KEY_LOOK_VELOCITY 180.0
+#define PLAYER_WALK_VELOCITY 4.0
+#define PLAYER_SPRINT_VELOCITY 6.0
+#define PLAYER_RAY_HIT_ENTITIES_NUMBER 5
+#define PLAYER_MAX_TARGET_DISTANCE 1.2
+#define PLAYER_WIDTH 0.23
+#define PLAYER_HEIGHT 0.23
+#define PLAYER_MAX 4
+#define PLAYER_DEAD_RESET_DELAY 2000
+```
+
+<ParamField path="PLAYER_RAYS_NO_HIT_LENGTH" type="double">
+  Maximum ray distance when no collision detected
+</ParamField>
+
+<ParamField path="PLAYER_FOV" type="double">
+  Field of view in degrees
+</ParamField>
+
+<ParamField path="PLAYER_RAY_SUBRAYS" type="int">
+  Number of sub-rays for improved collision detection
+</ParamField>
+
+<ParamField path="PLAYER_MOUSE_LOOK_VELOCITY" type="double">
+  Mouse look sensitivity multiplier
+</ParamField>
+
+<ParamField path="PLAYER_KEY_LOOK_VELOCITY" type="double">
+  Keyboard look rotation speed in degrees per second
+</ParamField>
+
+<ParamField path="PLAYER_WALK_VELOCITY" type="double">
+  Walking speed in units per second
+</ParamField>
+
+<ParamField path="PLAYER_SPRINT_VELOCITY" type="double">
+  Sprinting speed in units per second
+</ParamField>
+
+<ParamField path="PLAYER_RAY_HIT_ENTITIES_NUMBER" type="int">
+  Maximum number of entities detected per ray
+</ParamField>
+
+<ParamField path="PLAYER_MAX_TARGET_DISTANCE" type="double">
+  Maximum distance for entity interaction/targeting
+</ParamField>
+
+<ParamField path="PLAYER_WIDTH" type="double">
+  Player collision width in map units
+</ParamField>
+
+<ParamField path="PLAYER_HEIGHT" type="double">
+  Player collision height in map units
+</ParamField>
+
+<ParamField path="PLAYER_MAX" type="int">
+  Maximum number of simultaneous players (split-screen limit)
+</ParamField>
+
+<ParamField path="PLAYER_DEAD_RESET_DELAY" type="int">
+  Delay in milliseconds before respawning after death
+</ParamField>
+
+## Spawn Direction
+
+The identifier determines initial player orientation:
+
+- `'N'` - North (yaw: 270.0°)
+- `'S'` - South (yaw: 90.0°)
+- `'E'` - East (yaw: 0.0°)
+- `'W'` - West (yaw: 180.0°)
+
+## Map Type Configuration
+
+Players can be customized via map type properties:
+
+```
+N_CONTROLLER PLAYER
+FRIENDLY_FIRE FALSE
+N_COLLISION assets/sounds/player_collision.wav
+```
+
+<ParamField path="CONTROLLER" type="string">
+  Controller type. Set to `"PLAYER"` for player-controlled entities
+</ParamField>
+
+<ParamField path="FRIENDLY_FIRE" type="string">
+  `"TRUE"` to enable damage between players, `"FALSE"` to disable (default: `TRUE`)
+</ParamField>
+
+<ParamField path="COLLISION" type="string">
+  Path to collision sound effect
+</ParamField>
+
+## Example
+
+```c
+// Create a player spawning facing North
+t_player *player = player_new(game, window, 'N');
+
+if (!player)
+    return (error_handler("Failed to create player"));
+
+// Access player properties
+player->friendly_fire = false;
+player->controller_id = 0;
+
+// Access inherited character properties
+player->character.ammo = 50;
+player->character.score = 0;
+player->character.billboard.entity.health = 100;
+```
+
+## See Also
+
+- [Characters](/api/characters) - Base character functionality
+- [Items](/api/items) - Player inventory and weapons
+- [Game Objects](/api/game) - Game instance management

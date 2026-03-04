@@ -1,0 +1,217 @@
+---
+title: 'Camera'
+description: 'Camera structure and multi-threaded rendering system'
+---
+
+## Overview
+
+The camera system in Cub3D handles the rendering of the 3D world from a character's perspective. It uses multi-threaded raycasting to efficiently render walls and billboards.
+
+## s_camera Structure
+
+The camera structure stores rendering configuration for a character.
+
+```c
+struct s_camera
+{
+    t_character     *character;
+    double          fov;
+    int             rays;
+    double          *ray_distances;
+};
+```
+
+### Fields
+
+<ResponseField name="character" type="t_character*">
+  Pointer to the character this camera is rendering for
+</ResponseField>
+
+<ResponseField name="fov" type="double">
+  Field of view in degrees (default: PLAYER_FOV = 66.0)
+</ResponseField>
+
+<ResponseField name="rays" type="int">
+  Number of rays to cast (typically matches canvas width)
+</ResponseField>
+
+<ResponseField name="ray_distances" type="double*">
+  Array storing the distance each ray traveled. Used for billboard depth sorting and rendering. Length equals `rays`.
+</ResponseField>
+
+## s_render_config Structure
+
+Configuration structure for rendering operations.
+
+```c
+struct s_render_config
+{
+    t_ftm_image     *canvas;
+    t_game          *game;
+    t_character     *character;
+    double          fov;
+    int             rays;
+};
+```
+
+### Fields
+
+<ResponseField name="canvas" type="t_ftm_image*">
+  The image buffer to render to
+</ResponseField>
+
+<ResponseField name="game" type="t_game*">
+  Pointer to the game state
+</ResponseField>
+
+<ResponseField name="character" type="t_character*">
+  The character to render from
+</ResponseField>
+
+<ResponseField name="fov" type="double">
+  Field of view for rendering
+</ResponseField>
+
+<ResponseField name="rays" type="int">
+  Number of rays to cast
+</ResponseField>
+
+## Multi-Threaded Rendering
+
+The camera system uses parallel processing to improve performance.
+
+### Thread Configuration
+
+<ParamField path="CAMERA_THREADS" type="int" default="4">
+  Number of threads used for raycasting. Defined in `cub3d.h:96`.
+</ParamField>
+
+Each thread renders a horizontal slice of the screen:
+- Thread 0: rays 0 to (rays/4)
+- Thread 1: rays (rays/4) to (rays/2)
+- Thread 2: rays (rays/2) to (3*rays/4)
+- Thread 3: rays (3*rays/4) to rays
+
+### Thread Data Structure
+
+```c
+typedef struct s_thread_render_rays_data
+{
+    t_ftm_image     *canvas;
+    t_camera        *camera;
+    t_game          *game;
+    unsigned int    start;
+    unsigned int    end;
+} t_thread_render_rays_data;
+```
+
+<ResponseField name="start" type="unsigned int">
+  Starting ray index for this thread
+</ResponseField>
+
+<ResponseField name="end" type="unsigned int">
+  Ending ray index (exclusive) for this thread
+</ResponseField>
+
+## Core Functions
+
+### render_camera()
+
+Main camera rendering function that orchestrates the rendering pipeline.
+
+```c
+void render_camera(t_game *game, t_ftm_image *canvas, t_character *character)
+```
+
+<ParamField path="game" type="t_game*">
+  Game state containing entities, map, and configuration
+</ParamField>
+
+<ParamField path="canvas" type="t_ftm_image*">
+  Image buffer to render into
+</ParamField>
+
+<ParamField path="character" type="t_character*">
+  Character whose view to render
+</ParamField>
+
+**Implementation:**
+1. Creates a temporary camera structure
+2. Allocates ray_distances array
+3. Calls `render_walls()` to cast rays and draw walls
+4. Calls `render_billboards()` to render sprites
+5. Frees the ray_distances array
+
+**Source:** `src/utils/render/camera/camera.c:15`
+
+### render_walls()
+
+Multi-threaded wall rendering using DDA raycasting.
+
+```c
+void render_walls(t_game *game, t_ftm_image *canvas, t_camera *camera)
+```
+
+Divides the ray casting workload across `CAMERA_THREADS` threads. Each thread:
+1. Calculates ray angle for each column
+2. Performs DDA raycasting to find wall intersections
+3. Handles transparent walls recursively
+4. Stores distances in `camera->ray_distances`
+5. Draws vertical wall slices to the canvas
+
+**Source:** `src/utils/render/camera/walls/render.c:95`
+
+### render_billboards()
+
+Renders all billboard entities (sprites, characters, items).
+
+```c
+void render_billboards(t_game *game, t_ftm_image *canvas, t_camera *camera)
+```
+
+**Algorithm:**
+1. Sorts billboards by distance from camera (back to front)
+2. Iterates through sorted billboards
+3. Calculates screen position and size based on distance
+4. Checks visibility using ray_distances for depth testing
+5. Renders visible billboard slices
+
+**Source:** `src/utils/render/camera/billboards/render0.c:88`
+
+## Rendering Pipeline
+
+The complete rendering sequence:
+
+```c
+void render_game(t_game *game, t_ftm_image *canvas, t_character *character)
+{
+    // 1. Clear canvas with ceiling and floor colors
+    render_ceiling_and_floor(game, canvas);
+    
+    // 2. Render 3D world
+    render_camera(game, canvas, character);
+    
+    // 3. Render UI overlay
+    render_hud(game, canvas, character);
+}
+```
+
+## Camera Configuration Constants
+
+<ParamField path="PLAYER_FOV" type="double" default="66.0">
+  Default field of view in degrees. Defined in `cub3d.h:58`.
+</ParamField>
+
+<ParamField path="PLAYER_RAYS_NO_HIT_LENGTH" type="double" default="50.0">
+  Maximum ray distance when no wall is hit. Defined in `cub3d.h:57`.
+</ParamField>
+
+<ParamField path="PLAYER_RAY_SUBRAYS" type="int" default="5">
+  Number of sub-rays for anti-aliasing or precision. Defined in `cub3d.h:59`.
+</ParamField>
+
+## Related Structures
+
+See also:
+- [Raycasting](/api/raycasting) - DDA algorithm and ray calculations
+- [Sprites](/api/sprites) - Billboard and sprite rendering

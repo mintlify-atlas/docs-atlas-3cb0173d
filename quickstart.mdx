@@ -1,80 +1,383 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start Guide
+description: Get up and running with Cub3D in minutes
 ---
 
-## Get started in three steps
+# Quick Start
 
-Get your documentation site running locally and make your first customization.
+This guide will help you compile and run Cub3D on your system in just a few steps.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+Before you begin, ensure you have the following installed:
+
+<Steps>
+  <Step title="C Compiler">
+    You'll need a C compiler (gcc or clang) with C99 support.
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    <CodeGroup>
+    ```bash macOS
+    # Install Xcode Command Line Tools
+    xcode-select --install
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    ```bash Linux (Ubuntu/Debian)
+    sudo apt-get update
+    sudo apt-get install build-essential
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
+    ```bash Linux (Fedora)
+    sudo dnf install gcc make
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Development Libraries">
+    The build process will automatically compile SDL2 from source, but you may need some system dependencies.
+    
+    <CodeGroup>
+    ```bash macOS
+    # macOS frameworks are included by default
+    # No additional dependencies required
+    ```
+    
+    ```bash Linux (Ubuntu/Debian)
+    sudo apt-get install libpthread-stubs0-dev
+    ```
+    
+    ```bash Linux (Fedora)
+    sudo dnf install glibc-devel
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Make Utility">
+    Verify that `make` is installed:
+    
+    ```bash
+    make --version
+    ```
+  </Step>
+</Steps>
+
+## Compilation
+
+<Steps>
+  <Step title="Clone the Repository">
+    First, clone the Cub3D repository to your local machine:
+    
+    ```bash
+    git clone https://github.com/afonsopc/cub3d.git
+    cd cub3d
+    ```
+  </Step>
+  
+  <Step title="Build the Project">
+    The Makefile handles all dependencies automatically, including SDL2 and miniaudio:
+    
+    ```bash
+    make
+    ```
+    
+    <Note>
+    The first build will take several minutes as it compiles SDL2 from source. Subsequent builds will be much faster.
+    </Note>
+    
+    The build process will:
+    1. Extract and compile SDL2 from the included archive
+    2. Extract miniaudio headers
+    3. Compile all source files in `src/`
+    4. Link everything into the `cub3d` executable
+    
+    You should see output similar to:
+    
+    ```text
+    Compiling "SDL2".
+    Compiling "miniaudio".
+    Compiling "src/main.c" into "obj/src/main.o".
+    Compiling "src/utils/cub3d0.c" into "obj/src/utils/cub3d0.c".
+    ...
+    Compiling "obj/..." into "cub3d".
+    ```
+  </Step>
+  
+  <Step title="Verify the Build">
+    Check that the executable was created:
+    
+    ```bash
+    ls -lh cub3d
+    ```
+    
+    You should see the `cub3d` binary (approximately 1-2 MB).
+  </Step>
+</Steps>
+
+## Running Cub3D
+
+### Default Map (Hub)
+
+To run Cub3D with the default hub map:
+
+```bash
+./cub3d
+```
+
+This is equivalent to:
+
+```bash
+./cub3d maps/hub.cub
+```
+
+The hub map provides access to both the 42 Lisboa campus and Wolfenstein 3D levels through interactive elevators.
+
+### Specific Maps
+
+You can launch any map directly by providing its path as an argument:
+
+<CodeGroup>
+```bash 42 Lisboa Campus
+./cub3d maps/42lisboa.cub
+```
+
+```bash Wolfenstein 3D - Episode 1 Mission 1
+./cub3d maps/e1m1.cub
+```
+
+```bash Wolfenstein 3D - Episode 1 Mission 2
+./cub3d maps/e1m2.cub
+```
+
+```bash Simple Test Map
+./cub3d maps/smol.cub
+```
+</CodeGroup>
+
+### Available Maps
+
+The `maps/` directory contains several pre-built levels:
+
+| Map File | Description |
+|----------|-------------|
+| `hub.cub` | Central hub with elevators to other maps |
+| `42lisboa.cub` | 3D recreation of 42 Lisboa campus |
+| `e1m1.cub` | Wolfenstein 3D Episode 1, Mission 1 |
+| `e1m2.cub` | Wolfenstein 3D Episode 1, Mission 2 |
+| `smol.cub` | Small test map for quick testing |
+| `subject.cub` | Original 42 project subject map |
+
+## Controls
+
+### Keyboard Controls
+
+| Key | Action |
+|-----|--------|
+| `W` / `↑` | Move forward |
+| `S` / `↓` | Move backward |
+| `A` | Strafe left |
+| `D` | Strafe right |
+| `←` | Turn left |
+| `→` | Turn right |
+| `Space` | Use/Interact (open doors, use elevators) |
+| `E` | Use/Interact (alternative) |
+| `M` | Switch weapon (machine gun) |
+| `P` | Switch weapon (pistol) |
+| `K` | Switch weapon (knife) |
+| `ESC` | Exit game |
+
+### Mouse Controls
+
+- **Mouse Movement**: Look around / Turn
+- **Left Click**: Fire weapon (in Wolfenstein maps)
+
+### Controller Support
+
+Cub3D supports Xbox, PlayStation, and compatible game controllers:
+
+- **Left Stick**: Move
+- **Right Stick**: Look around
+- **A / X Button**: Fire weapon
+- **B / Circle Button**: Use/Interact
+- **Start**: Pause
+
+## Map File Format
+
+Cub3D uses `.cub` files to define maps. Here's a minimal example:
+
+```text maps/smol.cub
+NO assets/wolf3d/textures/grey-wall0.bmp
+SO assets/wolf3d/textures/purple-wall.bmp
+WE assets/wolf3d/textures/red-wall.bmp
+EA assets/wolf3d/textures/wood-wall.bmp
+
+F 50,50,50
+C 225,30,0
+
+111111
+1E00W1
+100001
+1E00W1
+111111
+```
+
+<Accordion title="Map Format Breakdown">
+  **Texture Definitions**
+  - `NO`: North-facing wall texture
+  - `SO`: South-facing wall texture
+  - `WE`: West-facing wall texture
+  - `EA`: East-facing wall texture
+  
+  **Colors**
+  - `F`: Floor color (RGB)
+  - `C`: Ceiling color (RGB)
+  
+  **Map Grid**
+  - `1`: Wall
+  - `0`: Empty space
+  - `N`, `S`, `E`, `W`: Player spawn position and orientation
+  
+  Maps can also define custom entities, doors, elevators, and much more. See the included maps for advanced examples.
 </Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Build Targets
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+The Makefile provides several useful targets:
 
-### Step 3: Go live
+<CodeGroup>
+```bash Clean Object Files
+make clean
+```
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+```bash Full Clean (includes dependencies)
+make fclean
+```
 
-## Next steps
+```bash Rebuild Everything
+make re
+```
 
-Now that you have your docs running, explore these key features:
+```bash Quick Development Build & Run
+make dev
+```
 
-<CardGroup cols={2}>
+```bash Run with All Maps (for testing)
+make run
+```
+</CodeGroup>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
+## Web Version (Advanced)
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
+To build the WebAssembly version for browsers, you'll need Emscripten installed:
 
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+<Steps>
+  <Step title="Install Emscripten">
+    Follow the [Emscripten installation guide](https://emscripten.org/docs/getting_started/downloads.html):
+    
+    ```bash
+    git clone https://github.com/emscripten-core/emsdk.git
+    cd emsdk
+    ./emsdk install latest
+    ./emsdk activate latest
+    source ./emsdk_env.sh
+    ```
+  </Step>
+  
+  <Step title="Build with Emscripten">
+    Use the Emscripten Makefile:
+    
+    ```bash
+    make -f emcc.Makefile
+    ```
+    
+    This generates:
+    - `cub3d.html` - The main HTML file
+    - `cub3d.js` - JavaScript glue code
+    - `cub3d.wasm` - WebAssembly binary
+    - `cub3d.data` - Packed assets (maps, textures, sounds)
+  </Step>
+  
+  <Step title="Run a Local Server">
+    You'll need a local web server to run the WASM build:
+    
+    ```bash
+    python3 server.py
+    ```
+    
+    Then open your browser to `http://localhost:8000/cub3d.html`
+  </Step>
+</Steps>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  The web build is optimized for performance with a reduced resolution (400x300) to run smoothly in browsers.
 </Note>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Compilation fails with SDL2 errors">
+    If SDL2 compilation fails, ensure you have the necessary development tools:
+    
+    ```bash
+    # macOS
+    xcode-select --install
+    
+    # Linux
+    sudo apt-get install build-essential autoconf libtool
+    ```
+    
+    Then run `make fclean` followed by `make` to rebuild from scratch.
+  </Accordion>
+  
+  <Accordion title="Game window doesn't open">
+    Check that:
+    1. You have a display server running (X11, Wayland, or macOS window server)
+    2. You're not trying to run it over SSH without X forwarding
+    3. Your graphics drivers are up to date
+  </Accordion>
+  
+  <Accordion title="No sound / audio issues">
+    The game uses miniaudio which should work out of the box. If you experience issues:
+    
+    - Check your system audio settings
+    - Ensure your audio device is not muted
+    - Try running with different audio backends (miniaudio auto-detects)
+  </Accordion>
+  
+  <Accordion title="Map file not found">
+    Ensure you're running the game from the project root directory where the `maps/` and `assets/` directories are located:
+    
+    ```bash
+    cd /path/to/cub3d
+    ./cub3d maps/yourmap.cub
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Explore Maps" icon="map">
+    Try out different maps to experience the variety of environments and gameplay
+  </Card>
+  
+  <Card title="Create Custom Maps" icon="pencil" href="/guides/creating-maps">
+    Learn the .cub format and create your own levels
+  </Card>
+  
+  <Card title="Technical Reference" icon="code" href="/reference/architecture">
+    Dive into the codebase architecture and systems
+  </Card>
+  
+  <Card title="Play Online" icon="globe">
+    Try the web version at [omelhorsite.pt](https://omelhorsite.pt/en/games/cub3d)
+  </Card>
+</CardGroup>
+
+## Getting Help
+
+If you encounter issues:
+
+1. Check the [GitHub repository](https://github.com/afonsopc/cub3d) for existing issues
+2. Review the source code comments for implementation details
+3. Examine the example maps in `maps/` for reference
+
+Happy raycasting!

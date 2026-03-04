@@ -1,0 +1,493 @@
+---
+title: "Configuration Reference"
+description: "Complete reference of all configurable constants and settings in Cub3D"
+---
+
+## Overview
+
+All configuration constants are defined in `headers/cub3d.h`. These control window settings, player behavior, entity properties, rendering parameters, and performance tuning.
+
+## Window Configuration
+
+Window and display settings.
+
+<ParamField path="W_TITLE" type="string" default="cub3d">
+  Window title displayed in the title bar.
+  
+  ```c
+  #define W_TITLE "cub3d"
+  ```
+</ParamField>
+
+<ParamField path="W_WIDTH" type="int" default="1024">
+  Window width in pixels. Can be overridden at compile time.
+  
+  ```c
+  #ifndef W_WIDTH
+  # define W_WIDTH 1024
+  #endif
+  ```
+  
+  <Tip>Compile with custom width: `make CFLAGS="-DW_WIDTH=1920"`</Tip>
+</ParamField>
+
+<ParamField path="W_HEIGHT" type="int" default="768">
+  Window height in pixels. Can be overridden at compile time.
+  
+  ```c
+  #ifndef W_HEIGHT
+  # define W_HEIGHT 768
+  #endif
+  ```
+</ParamField>
+
+## Player Configuration
+
+Player movement, camera, and interaction settings.
+
+### Movement
+
+<ParamField path="PLAYER_WALK_VELOCITY" type="double" default="4.0">
+  Player walking speed in units per second.
+  
+  ```c
+  #define PLAYER_WALK_VELOCITY 4.0
+  ```
+</ParamField>
+
+<ParamField path="PLAYER_SPRINT_VELOCITY" type="double" default="6.0">
+  Player sprinting speed in units per second (1.5x walk speed).
+  
+  ```c
+  #define PLAYER_SPRINT_VELOCITY 6.0
+  ```
+</ParamField>
+
+<ParamField path="PLAYER_WIDTH" type="double" default="0.23">
+  Player collision box width in map units.
+  
+  ```c
+  #define PLAYER_WIDTH 0.23
+  ```
+</ParamField>
+
+<ParamField path="PLAYER_HEIGHT" type="double" default="0.23">
+  Player collision box height in map units.
+  
+  ```c
+  #define PLAYER_HEIGHT 0.23
+  ```
+</ParamField>
+
+### Camera & Vision
+
+<ParamField path="PLAYER_FOV" type="double" default="66.0">
+  Player field of view in degrees. Standard FOV similar to classic FPS games.
+  
+  ```c
+  #define PLAYER_FOV 66.0
+  ```
+</ParamField>
+
+<ParamField path="PLAYER_MOUSE_LOOK_VELOCITY" type="double" default="20.0">
+  Mouse look sensitivity (degrees per pixel movement).
+  
+  ```c
+  #define PLAYER_MOUSE_LOOK_VELOCITY 20.0
+  ```
+</ParamField>
+
+<ParamField path="PLAYER_KEY_LOOK_VELOCITY" type="double" default="180.0">
+  Keyboard look rotation speed in degrees per second.
+  
+  ```c
+  #define PLAYER_KEY_LOOK_VELOCITY 180.0
+  ```
+</ParamField>
+
+### Raycasting
+
+<ParamField path="PLAYER_RAYS_NO_HIT_LENGTH" type="double" default="50.0">
+  Maximum ray distance when no wall is intersected.
+  
+  ```c
+  #define PLAYER_RAYS_NO_HIT_LENGTH 50.0
+  ```
+  
+  <Warning>Setting this too high impacts performance. Setting too low causes visual artifacts.</Warning>
+</ParamField>
+
+<ParamField path="PLAYER_RAY_SUBRAYS" type="int" default="5">
+  Number of sub-rays cast per screen column for improved hit detection.
+  
+  ```c
+  #define PLAYER_RAY_SUBRAYS 5
+  ```
+  
+  Higher values improve accuracy but reduce performance.
+</ParamField>
+
+<ParamField path="PLAYER_RAY_HIT_ENTITIES_NUMBER" type="int" default="5">
+  Maximum number of entities tracked per ray for shooting.
+  
+  ```c
+  #define PLAYER_RAY_HIT_ENTITIES_NUMBER 5
+  ```
+</ParamField>
+
+### Interaction
+
+<ParamField path="PLAYER_MAX_TARGET_DISTANCE" type="double" default="1.2">
+  Maximum distance to interact with entities (doors, items, etc.).
+  
+  ```c
+  #define PLAYER_MAX_TARGET_DISTANCE 1.2
+  ```
+</ParamField>
+
+### Multiplayer
+
+<ParamField path="PLAYER_MAX" type="int" default="4">
+  Maximum number of simultaneous players.
+  
+  ```c
+  #define PLAYER_MAX 4
+  ```
+</ParamField>
+
+<ParamField path="PLAYER_DEAD_RESET_DELAY" type="int" default="2000">
+  Milliseconds before respawning a dead player.
+  
+  ```c
+  #define PLAYER_DEAD_RESET_DELAY 2000
+  ```
+</ParamField>
+
+## Character Configuration
+
+Settings for NPCs and character entities.
+
+<ParamField path="CHARACTER_HIT_DELAY" type="double" default="100.0">
+  Milliseconds of invulnerability after taking damage (prevents multi-hit).
+  
+  ```c
+  #define CHARACTER_HIT_DELAY 100.0
+  ```
+</ParamField>
+
+<ParamField path="CHARACTER_DEFAULT_MAX_HEALTH" type="int" default="100">
+  Default maximum health for character entities.
+  
+  ```c
+  #define CHARACTER_DEFAULT_MAX_HEALTH 100
+  ```
+</ParamField>
+
+## Billboard Configuration
+
+Settings for sprite-based entities.
+
+<ParamField path="BILLBOARD_WIDTH" type="double" default="0.23">
+  Default width of billboard sprites in map units.
+  
+  ```c
+  #define BILLBOARD_WIDTH 0.23
+  ```
+</ParamField>
+
+<ParamField path="BILLBOARD_HEIGHT" type="double" default="0.23">
+  Default height of billboard sprites in map units.
+  
+  ```c
+  #define BILLBOARD_HEIGHT 0.23
+  ```
+</ParamField>
+
+## Entity Configuration
+
+General entity system settings.
+
+<ParamField path="INVENTORY_SIZE" type="int" default="9">
+  Number of inventory slots per character.
+  
+  ```c
+  #define INVENTORY_SIZE 9
+  ```
+  
+  ```c
+  struct s_character {
+      // ...
+      t_item *inventory[INVENTORY_SIZE];
+      int inventory_index;  // Currently selected slot (0-8)
+  };
+  ```
+</ParamField>
+
+<ParamField path="INVENTORY_SCROLL_DELAY" type="double" default="0.5">
+  Minimum seconds between inventory slot changes (prevents accidental scrolling).
+  
+  ```c
+  #define INVENTORY_SCROLL_DELAY 0.5
+  ```
+</ParamField>
+
+## Wall Configuration
+
+<ParamField path="WALL_INTERACTION_DISTANCE" type="double" default="2.0">
+  Maximum distance to interact with walls (for action prompts).
+  
+  ```c
+  #define WALL_INTERACTION_DISTANCE 2.0
+  ```
+</ParamField>
+
+## Door Configuration
+
+<ParamField path="DOOR_ANIMATION_FPS" type="int" default="6">
+  Frame rate for door opening/closing animations.
+  
+  ```c
+  #define DOOR_ANIMATION_FPS 6
+  ```
+  
+  Animation delay is calculated as: `1000 / DOOR_ANIMATION_FPS` milliseconds per frame.
+</ParamField>
+
+## Map Configuration
+
+Map parsing and defaults.
+
+<ParamField path="DEFAULT_MAP_PATH" type="string" default="maps/hub.cub">
+  Map file loaded at startup.
+  
+  ```c
+  #define DEFAULT_MAP_PATH "maps/hub.cub"
+  ```
+</ParamField>
+
+<ParamField path="DEFAULT_AIR_TYPES" type="string" default="0 \t\n\v\f\r">
+  Characters representing walkable space in map files.
+  
+  ```c
+  #define DEFAULT_AIR_TYPES "0 \t\n\v\f\r"
+  ```
+</ParamField>
+
+<ParamField path="DEFAULT_WALL_TYPES" type="string" default="1">
+  Characters representing solid walls in map files.
+  
+  ```c
+  #define DEFAULT_WALL_TYPES "1"
+  ```
+</ParamField>
+
+<ParamField path="DEFAULT_PLAYER_TYPES" type="string" default="NSEW">
+  Characters representing player spawn points (N=North, S=South, E=East, W=West).
+  
+  ```c
+  #define DEFAULT_PLAYER_TYPES "NSEW"
+  ```
+  
+  The character determines initial facing direction.
+</ParamField>
+
+## Rendering Configuration
+
+### Threading
+
+<ParamField path="CAMERA_THREADS" type="int" default="4">
+  Number of parallel threads for raycasting.
+  
+  ```c
+  #define CAMERA_THREADS 4
+  ```
+  
+  <Info>
+    Optimal value depends on CPU core count. 4 threads works well for quad-core processors.
+  </Info>
+</ParamField>
+
+### Minimap
+
+<ParamField path="MINIMAP_WIDTH_MULTIPLIER" type="double" default="0.25">
+  Minimap width as a fraction of window width.
+  
+  ```c
+  #define MINIMAP_WIDTH_MULTIPLIER 0.25
+  ```
+  
+  For 1024px window: minimap width = 256px
+</ParamField>
+
+<ParamField path="MINIMAP_HEIGHT_MULTIPLIER" type="double" default="0.25">
+  Minimap height as a fraction of window height.
+  
+  ```c
+  #define MINIMAP_HEIGHT_MULTIPLIER 0.25
+  ```
+  
+  For 768px window: minimap height = 192px
+</ParamField>
+
+## Performance Configuration
+
+### Frame Timing
+
+<ParamField path="FPS_LIMIT" type="int" default="1000">
+  Target frames per second (uncapped by default).
+  
+  ```c
+  #define FPS_LIMIT 1000
+  ```
+  
+  <Tip>Set to 60 for VSync-like behavior: `#define FPS_LIMIT 60`</Tip>
+</ParamField>
+
+<ParamField path="DELTA_TIME_START" type="float" default="0.016f">
+  Initial delta time in seconds (equivalent to ~62.5 FPS).
+  
+  ```c
+  #define DELTA_TIME_START 0.016f
+  ```
+  
+  Updated dynamically each frame based on actual timing.
+</ParamField>
+
+### Loading Screen
+
+<ParamField path="LOADING_MIN_LENGTH" type="int" default="1000">
+  Minimum milliseconds to display loading screen.
+  
+  ```c
+  #define LOADING_MIN_LENGTH 1000
+  ```
+  
+  Ensures loading screen is visible even for fast loads.
+</ParamField>
+
+## Asset Paths
+
+### Fonts
+
+<ParamField path="DEFAULT_FONT_PATH" type="string" default="assets/fonts/IBM-VGA-8x16">
+  Default bitmap font for text rendering.
+  
+  ```c
+  #define DEFAULT_FONT_PATH "assets/fonts/IBM-VGA-8x16"
+  ```
+</ParamField>
+
+### Textures
+
+<ParamField path="PLACEHOLDER_IMAGE_PATH" type="string" default="assets/textures/placeholder.bmp">
+  Fallback texture when assets fail to load.
+  
+  ```c
+  #define PLACEHOLDER_IMAGE_PATH "assets/textures/placeholder.bmp"
+  ```
+</ParamField>
+
+<ParamField path="LOADING_IMAGE_PATH" type="string" default="assets/textures/loading.bmp">
+  Image displayed during map loading.
+  
+  ```c
+  #define LOADING_IMAGE_PATH "assets/textures/loading.bmp"
+  ```
+</ParamField>
+
+## Mathematical Constants
+
+<ParamField path="PI" type="double" default="3.14159265359">
+  Pi constant for trigonometric calculations.
+  
+  ```c
+  #define PI 3.14159265359
+  ```
+</ParamField>
+
+## Compilation Flags
+
+From `Makefile`:
+
+<CodeGroup>
+
+```bash Compiler Flags
+CC = cc
+CFLAGS = -Wall -Wextra -Werror -O3 -g
+```
+
+```bash Includes
+INCLUDES = -I headers
+```
+
+```bash Libraries
+LIBS = -L lib
+LDLIBS = -lSDL2 -ldl -lpthread
+```
+
+```bash Custom Window Size
+# Compile with 1920x1080 resolution
+make CFLAGS="-Wall -Wextra -Werror -O3 -DW_WIDTH=1920 -DW_HEIGHT=1080"
+```
+
+</CodeGroup>
+
+## Platform-Specific Settings
+
+### Emscripten (WebAssembly)
+
+```c
+#ifdef __EMSCRIPTEN__
+# include <emscripten.h>
+#endif
+```
+
+When compiled with Emscripten, threading behavior is modified for browser compatibility.
+
+### macOS vs Linux
+
+The Makefile automatically detects the platform and links appropriate frameworks:
+
+<Tabs>
+  <Tab title="macOS">
+    ```makefile
+    LDLIBS += -framework OpenGL
+    LDLIBS += -framework AppKit
+    LDLIBS += -framework CoreAudio
+    # ... additional frameworks
+    ```
+  </Tab>
+  
+  <Tab title="Linux">
+    ```makefile
+    LDLIBS = -lSDL2 -ldl -lpthread
+    CFLAGS += -Wno-stringop-overflow  # GCC-specific
+    ```
+  </Tab>
+</Tabs>
+
+## Configuration Best Practices
+
+<Card title="Performance Tuning" icon="gauge">
+  - **High-end systems**: Increase `CAMERA_THREADS` to 8, set `FPS_LIMIT` to 144+
+  - **Low-end systems**: Reduce `PLAYER_RAY_SUBRAYS` to 3, limit FPS to 60
+  - **Web builds**: Use 2-4 threads, lower FOV for better performance
+</Card>
+
+<Card title="Gameplay Tuning" icon="gamepad">
+  - Increase `PLAYER_SPRINT_VELOCITY` for faster-paced gameplay
+  - Adjust `CHARACTER_HIT_DELAY` to balance combat difficulty
+  - Modify `INVENTORY_SIZE` for more/fewer item slots
+</Card>
+
+<Card title="Visual Tuning" icon="eye">
+  - Wider `PLAYER_FOV` (90+) for more peripheral vision
+  - Smaller `BILLBOARD_WIDTH/HEIGHT` for larger sprites
+  - Adjust `MINIMAP_*_MULTIPLIER` for different minimap sizes
+</Card>
+
+## See Also
+
+- [Architecture Overview](/reference/architecture) - System design and module structure
+- [Entities API](/reference/entities-api) - Entity structures using these constants
+- [Items & Weapons](/reference/items-weapons) - Item system configuration

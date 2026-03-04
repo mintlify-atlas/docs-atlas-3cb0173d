@@ -1,0 +1,342 @@
+---
+title: 'Characters'
+description: 'Character entities with AI, inventory, and combat systems'
+---
+
+## Overview
+
+Characters are billboard entities with inventory, health, AI behavior, and animation states. They serve as the base for both players and NPCs.
+
+## Function Reference
+
+### character_new()
+
+Creates and initializes a new character entity.
+
+```c
+t_character *character_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  Pointer to the game instance
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  Pointer to the window instance
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Character identifier for loading configuration and assets from the map
+</ParamField>
+
+<ResponseField name="return" type="t_character *">
+  Pointer to the newly created character, or `NULL` on allocation failure
+</ResponseField>
+
+## Structure Definition
+
+### s_character
+
+The character structure extends `t_billboard` with combat, inventory, and AI properties.
+
+```c
+struct s_character
+{
+    t_billboard      billboard;
+    t_sprite         **using_sprite;
+    t_sprite         **death_sprite;
+    t_sprite         **hit_sprite;
+    t_sprite         **walking_sprite;
+    t_sprite         **_sprite;
+    t_time           last_hit;
+    t_time           last_use;
+    t_time           last_auto_use;
+    t_fta_audio      *hit_sound;
+    t_fta_audio      *death_sound;
+    t_entity         *target_entity;
+    t_character      *last_hit_by_character;
+    t_direction      target_entity_direction;
+    t_time           last_inventory_scroll;
+    bool             cheating;
+    t_item           *inventory[INVENTORY_SIZE];
+    t_drop           *drop;
+    bool             drop_items;
+    double           fov;
+    int              rays;
+    int              inventory_index;
+    char             last_used_item_identifier;
+    int              ammo;
+    int              score;
+    t_time           died_at;
+    bool             was_already_dead;
+    bool             dead;
+};
+```
+
+<ResponseField name="billboard" type="t_billboard">
+  Base billboard entity data (see [Billboards](/api/billboards))
+</ResponseField>
+
+<ResponseField name="using_sprite" type="t_sprite **">
+  360-degree sprite array for item usage animation
+</ResponseField>
+
+<ResponseField name="death_sprite" type="t_sprite **">
+  360-degree sprite array for death animation
+</ResponseField>
+
+<ResponseField name="hit_sprite" type="t_sprite **">
+  360-degree sprite array for hit reaction animation
+</ResponseField>
+
+<ResponseField name="walking_sprite" type="t_sprite **">
+  360-degree sprite array for walking animation
+</ResponseField>
+
+<ResponseField name="_sprite" type="t_sprite **">
+  Default idle sprite (reference to billboard.sprites)
+</ResponseField>
+
+<ResponseField name="last_hit" type="t_time">
+  Timestamp of last damage received
+</ResponseField>
+
+<ResponseField name="last_use" type="t_time">
+  Timestamp of last item use
+</ResponseField>
+
+<ResponseField name="last_auto_use" type="t_time">
+  Timestamp of last automatic item use
+</ResponseField>
+
+<ResponseField name="hit_sound" type="t_fta_audio *">
+  Audio played when character takes damage
+</ResponseField>
+
+<ResponseField name="death_sound" type="t_fta_audio *">
+  Audio played when character dies
+</ResponseField>
+
+<ResponseField name="target_entity" type="t_entity *">
+  Currently targeted entity for AI/interaction
+</ResponseField>
+
+<ResponseField name="last_hit_by_character" type="t_character *">
+  Reference to the character that last damaged this character
+</ResponseField>
+
+<ResponseField name="target_entity_direction" type="t_direction">
+  Direction to the target entity
+</ResponseField>
+
+<ResponseField name="last_inventory_scroll" type="t_time">
+  Timestamp of last inventory scroll action
+</ResponseField>
+
+<ResponseField name="cheating" type="bool">
+  Debug flag for cheat mode
+</ResponseField>
+
+<ResponseField name="inventory" type="t_item *[INVENTORY_SIZE]">
+  Array of inventory items (size: 9)
+</ResponseField>
+
+<ResponseField name="drop" type="t_drop *">
+  Drop entity spawned when items are dropped
+</ResponseField>
+
+<ResponseField name="drop_items" type="bool">
+  Whether character drops items on death
+</ResponseField>
+
+<ResponseField name="fov" type="double">
+  Field of view for rendering (defaults to PLAYER_FOV if not set)
+</ResponseField>
+
+<ResponseField name="rays" type="int">
+  Number of rays for raycasting
+</ResponseField>
+
+<ResponseField name="inventory_index" type="int">
+  Currently selected inventory slot (0-8)
+</ResponseField>
+
+<ResponseField name="last_used_item_identifier" type="char">
+  Identifier of the last used item
+</ResponseField>
+
+<ResponseField name="ammo" type="int">
+  Current ammunition count
+</ResponseField>
+
+<ResponseField name="score" type="int">
+  Character's score value (awarded to killer on death)
+</ResponseField>
+
+<ResponseField name="died_at" type="t_time">
+  Timestamp of death
+</ResponseField>
+
+<ResponseField name="was_already_dead" type="bool">
+  Flag tracking previous death state
+</ResponseField>
+
+<ResponseField name="dead" type="bool">
+  Current death state
+</ResponseField>
+
+## Constants
+
+```c
+#define CHARACTER_HIT_DELAY 100.0
+#define CHARACTER_DEFAULT_MAX_HEALTH 100
+#define INVENTORY_SIZE 9
+#define INVENTORY_SCROLL_DELAY 0.5
+```
+
+<ParamField path="CHARACTER_HIT_DELAY" type="double">
+  Duration in milliseconds that hit animation plays
+</ParamField>
+
+<ParamField path="CHARACTER_DEFAULT_MAX_HEALTH" type="int">
+  Default maximum health if not specified in map configuration
+</ParamField>
+
+<ParamField path="INVENTORY_SIZE" type="int">
+  Number of inventory slots
+</ParamField>
+
+<ParamField path="INVENTORY_SCROLL_DELAY" type="double">
+  Minimum delay in seconds between inventory scrolls
+</ParamField>
+
+## Inventory System
+
+Characters have a 9-slot inventory system configured via map types:
+
+```
+Z_0_INVENTORY w
+Z_1_INVENTORY p
+Z_2_INVENTORY h
+```
+
+Each slot is configured with `{identifier}_{slot}_INVENTORY` where slot is 0-8.
+
+## Map Type Configuration
+
+```
+Z_MAX_HEALTH 150
+Z_AMMO 50
+Z_SCORE 100
+Z_FOV 66.0
+Z_DROP_ITEMS TRUE
+Z_WALKING assets/sprites/zombie/walk
+Z_DEATH assets/sprites/zombie/death
+Z_HIT assets/sprites/zombie/hit
+Z_HIT assets/sounds/zombie_hit.wav
+Z_DEATH assets/sounds/zombie_death.wav
+Z_DROP d
+```
+
+<ParamField path="MAX_HEALTH" type="int">
+  Maximum health points (default: 100)
+</ParamField>
+
+<ParamField path="AMMO" type="int">
+  Starting ammunition
+</ParamField>
+
+<ParamField path="SCORE" type="int">
+  Score awarded to killer on death
+</ParamField>
+
+<ParamField path="FOV" type="double">
+  Field of view in degrees
+</ParamField>
+
+<ParamField path="DROP_ITEMS" type="string">
+  `"TRUE"` to drop inventory on death, `"FALSE"` otherwise
+</ParamField>
+
+<ParamField path="WALKING" type="string">
+  Path to walking sprite assets (360-degree)
+</ParamField>
+
+<ParamField path="DEATH" type="string">
+  Path to death sprite assets (360-degree)
+</ParamField>
+
+<ParamField path="HIT" type="string">
+  Path to hit sprite assets (360-degree) or hit sound
+</ParamField>
+
+<ParamField path="DROP" type="char">
+  Drop entity identifier spawned on death
+</ParamField>
+
+## Animation System
+
+Characters automatically switch between animation states:
+
+1. **Death** - When `health <= 0` and `dead == true`
+2. **Hit** - Within `CHARACTER_HIT_DELAY` ms after taking damage
+3. **Using** - While using an item
+4. **Walking** - While controller movement is active
+5. **Idle** - Default state
+
+All animations support 360-degree viewing angles.
+
+## Combat System
+
+When a character is shot:
+
+```c
+void character_shot(t_entity *shooted, t_character *shooter)
+```
+
+- Updates `last_hit` timestamp
+- Sets `last_hit_by_character` to the shooter
+- Plays hit sound or death sound
+- Awards `score` to shooter on death
+- Sets `dead = true` when health reaches 0
+- Triggers death animation
+
+## Helper Functions
+
+```c
+void set_using(t_game *game, t_character *character);
+bool walking(t_entity *entity);
+bool using(t_character *character);
+void call_item_frames(t_character *character);
+void drop_items(t_game *game, t_character *character);
+void free_inventory_items(t_character *character);
+```
+
+## Example
+
+```c
+// Create a zombie character
+t_character *zombie = character_new(game, window, 'Z');
+
+if (!zombie)
+    return (error_handler("Failed to create character"));
+
+// Configure character
+zombie->ammo = 0;
+zombie->score = 50;
+zombie->billboard.entity.health = 150;
+
+// Add item to inventory
+zombie->inventory[0] = weapon_new(game, window, 'w');
+zombie->inventory_index = 0;
+
+// Check character state
+if (zombie->dead)
+    respawn_character(zombie);
+```
+
+## See Also
+
+- [Player](/api/player) - Player-specific character extension
+- [Items](/api/items) - Inventory system
+- [Billboards](/api/billboards) - Base billboard entity

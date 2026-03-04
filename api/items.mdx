@@ -1,0 +1,440 @@
+---
+title: 'Items'
+description: 'Item system with weapons, collectibles, and inventory management'
+---
+
+## Overview
+
+The item system provides a flexible framework for weapons, collectibles, and usable items. Items can be carried in character inventories, dropped as world entities, and configured with custom behaviors.
+
+## Function Reference
+
+### item_new()
+
+Creates a generic item.
+
+```c
+t_item *item_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  Pointer to the game instance
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  Pointer to the window instance
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Item identifier for configuration lookup
+</ParamField>
+
+<ResponseField name="return" type="t_item *">
+  Pointer to the newly created item, or `NULL` on allocation failure
+</ResponseField>
+
+### weapon_new()
+
+Creates a weapon item with damage and range properties.
+
+```c
+t_weapon *weapon_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  Pointer to the game instance
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  Pointer to the window instance
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Weapon identifier for configuration lookup
+</ParamField>
+
+<ResponseField name="return" type="t_weapon *">
+  Pointer to the newly created weapon, or `NULL` on allocation failure
+</ResponseField>
+
+### collectible_new()
+
+Creates a collectible item that modifies character stats.
+
+```c
+t_collectible *collectible_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+<ParamField path="game" type="t_game *" required>
+  Pointer to the game instance
+</ParamField>
+
+<ParamField path="window" type="t_ftm_window *" required>
+  Pointer to the window instance
+</ParamField>
+
+<ParamField path="identifier" type="char" required>
+  Collectible identifier for configuration lookup
+</ParamField>
+
+<ResponseField name="return" type="t_collectible *">
+  Pointer to the newly created collectible, or `NULL` on allocation failure
+</ResponseField>
+
+## Structure Definitions
+
+### s_item
+
+Base item structure with common properties and behavior hooks.
+
+```c
+struct s_item
+{
+    void            (*frame)(t_item *item);
+    void            (*clear)(void *this);
+    void            (*use)(t_item *item, t_drop *drop);
+    void            (*drop)(t_game *, t_ftm_window *, t_item *, t_character *dropper);
+    char            identifier;
+    char            *name;
+    char            *description;
+    bool            weapon;
+    bool            collectible;
+    bool            can_use;
+    t_character     *user;
+    bool            prev_using;
+    bool            already_using;
+    bool            single_use;
+    t_time          use_delay;
+    t_fta_audio     *cant_sound;
+    t_time          last_cant_use_sound_play;
+    t_time          last_use;
+    t_fta_audio     *use_sound;
+    t_fta_audio     *get_sound;
+    t_sprite        *icon_use_sprite;
+    t_sprite        *_icon_sprite;
+    t_sprite        *icon_sprite;
+    t_sprite        *screen_use_sprite;
+    t_sprite        *screen_sprite;
+    t_sprite        *_screen_sprite;
+};
+```
+
+<ResponseField name="frame" type="void (*)(t_item *)">
+  Called every frame to update item state
+</ResponseField>
+
+<ResponseField name="clear" type="void (*)(void *)">
+  Cleanup function called before freeing item
+</ResponseField>
+
+<ResponseField name="use" type="void (*)(t_item *, t_drop *)">
+  Called when item is used by a character
+</ResponseField>
+
+<ResponseField name="drop" type="void (*)(t_game *, t_ftm_window *, t_item *, t_character *)">
+  Called when item is dropped into the world
+</ResponseField>
+
+<ResponseField name="identifier" type="char">
+  Unique character identifying this item type
+</ResponseField>
+
+<ResponseField name="name" type="char *">
+  Display name of the item
+</ResponseField>
+
+<ResponseField name="description" type="char *">
+  Item description text
+</ResponseField>
+
+<ResponseField name="weapon" type="bool">
+  True if item is a weapon
+</ResponseField>
+
+<ResponseField name="collectible" type="bool">
+  True if item is a collectible
+</ResponseField>
+
+<ResponseField name="can_use" type="bool">
+  Whether item can currently be used
+</ResponseField>
+
+<ResponseField name="user" type="t_character *">
+  Character currently using this item
+</ResponseField>
+
+<ResponseField name="prev_using" type="bool">
+  Previous frame's usage state
+</ResponseField>
+
+<ResponseField name="already_using" type="bool">
+  True if item is currently being used
+</ResponseField>
+
+<ResponseField name="single_use" type="bool">
+  If true, item is consumed after one use
+</ResponseField>
+
+<ResponseField name="use_delay" type="t_time">
+  Minimum delay between uses in milliseconds
+</ResponseField>
+
+<ResponseField name="cant_sound" type="t_fta_audio *">
+  Sound played when item cannot be used
+</ResponseField>
+
+<ResponseField name="last_cant_use_sound_play" type="t_time">
+  Timestamp of last "can't use" sound play
+</ResponseField>
+
+<ResponseField name="last_use" type="t_time">
+  Timestamp of last use
+</ResponseField>
+
+<ResponseField name="use_sound" type="t_fta_audio *">
+  Sound played when item is used
+</ResponseField>
+
+<ResponseField name="get_sound" type="t_fta_audio *">
+  Sound played when item is picked up
+</ResponseField>
+
+<ResponseField name="icon_use_sprite" type="t_sprite *">
+  Icon sprite displayed during use
+</ResponseField>
+
+<ResponseField name="_icon_sprite" type="t_sprite *">
+  Original icon sprite reference
+</ResponseField>
+
+<ResponseField name="icon_sprite" type="t_sprite *">
+  Current icon sprite (for HUD)
+</ResponseField>
+
+<ResponseField name="screen_use_sprite" type="t_sprite *">
+  Full-screen sprite during use
+</ResponseField>
+
+<ResponseField name="screen_sprite" type="t_sprite *">
+  Current screen sprite
+</ResponseField>
+
+<ResponseField name="_screen_sprite" type="t_sprite *">
+  Original screen sprite reference
+</ResponseField>
+
+### s_weapon
+
+Weapon item with combat properties.
+
+```c
+struct s_weapon
+{
+    t_item      item;
+    int         damage;
+    double      range;
+    int         ammo_usage;
+};
+```
+
+<ResponseField name="item" type="t_item">
+  Base item structure
+</ResponseField>
+
+<ResponseField name="damage" type="int">
+  Damage dealt per hit
+</ResponseField>
+
+<ResponseField name="range" type="double">
+  Maximum effective range
+</ResponseField>
+
+<ResponseField name="ammo_usage" type="int">
+  Ammunition consumed per use
+</ResponseField>
+
+### s_collectible
+
+Collectible item that modifies character stats.
+
+```c
+struct s_collectible
+{
+    t_item  item;
+    int     health;
+    int     score;
+    int     ammo;
+};
+```
+
+<ResponseField name="item" type="t_item">
+  Base item structure
+</ResponseField>
+
+<ResponseField name="health" type="int">
+  Health points added when collected
+</ResponseField>
+
+<ResponseField name="score" type="int">
+  Score points added when collected
+</ResponseField>
+
+<ResponseField name="ammo" type="int">
+  Ammunition added when collected
+</ResponseField>
+
+## Map Type Configuration
+
+### Item Configuration
+
+```
+w_NAME Pistol
+w_DESCRIPTION A standard 9mm pistol
+w_USE_DELAY 0.5
+w_SINGLE_USE FALSE
+w_ICON assets/sprites/pistol_icon.bmp
+w_SCREEN assets/sprites/pistol_screen.bmp
+w_ICON_USE assets/sprites/pistol_icon_use.bmp
+w_SCREEN_USE assets/sprites/pistol_screen_use.bmp
+w_USE assets/sounds/pistol_fire.wav
+w_GET assets/sounds/pickup.wav
+w_CANT_USE assets/sounds/empty_click.wav
+```
+
+<ParamField path="NAME" type="string">
+  Display name of the item
+</ParamField>
+
+<ParamField path="DESCRIPTION" type="string">
+  Item description text
+</ParamField>
+
+<ParamField path="USE_DELAY" type="double">
+  Delay between uses in seconds
+</ParamField>
+
+<ParamField path="SINGLE_USE" type="string">
+  `"TRUE"` for consumable items, `"FALSE"` for reusable
+</ParamField>
+
+<ParamField path="ICON" type="string">
+  Path to inventory icon sprite
+</ParamField>
+
+<ParamField path="SCREEN" type="string">
+  Path to first-person screen sprite
+</ParamField>
+
+<ParamField path="ICON_USE" type="string">
+  Path to icon sprite during use
+</ParamField>
+
+<ParamField path="SCREEN_USE" type="string">
+  Path to screen sprite during use
+</ParamField>
+
+<ParamField path="USE" type="string">
+  Path to use sound effect
+</ParamField>
+
+<ParamField path="GET" type="string">
+  Path to pickup sound effect
+</ParamField>
+
+<ParamField path="CANT_USE" type="string">
+  Path to sound when item cannot be used
+</ParamField>
+
+### Weapon Configuration
+
+```
+w_DAMAGE 25
+w_RANGE 10.0
+w_AMMO_USAGE 1
+```
+
+<ParamField path="DAMAGE" type="int">
+  Damage dealt per shot
+</ParamField>
+
+<ParamField path="RANGE" type="double">
+  Maximum effective range
+</ParamField>
+
+<ParamField path="AMMO_USAGE" type="int">
+  Ammunition consumed per use
+</ParamField>
+
+### Collectible Configuration
+
+```
+h_HEALTH 50
+h_AMMO 0
+h_SCORE 10
+```
+
+<ParamField path="HEALTH" type="int">
+  Health points restored (absolute value used)
+</ParamField>
+
+<ParamField path="AMMO" type="int">
+  Ammunition added (absolute value used)
+</ParamField>
+
+<ParamField path="SCORE" type="int">
+  Score points added (absolute value used)
+</ParamField>
+
+## Helper Functions
+
+```c
+void free_item(void *data);
+void item_use(t_item *item, t_drop *drop);
+void item_drop(t_game *game, t_ftm_window *window, t_item *item, t_character *dropper);
+void item_frame(t_item *item);
+
+void weapon_use(t_item *item, t_drop *drop);
+void weapon_drop(t_game *game, t_ftm_window *window, t_item *item, t_character *dropper);
+void weapon_frame(t_item *item);
+
+void collectible_use(t_item *item, t_drop *drop);
+void collectible_drop(t_game *game, t_ftm_window *window, t_item *item, t_character *dropper);
+void collectible_frame(t_item *item);
+```
+
+## Example
+
+```c
+// Create a weapon
+t_weapon *pistol = weapon_new(game, window, 'w');
+pistol->damage = 25;
+pistol->range = 10.0;
+pistol->ammo_usage = 1;
+pistol->item.use_delay = 500; // 0.5 seconds
+
+// Create a health pack
+t_collectible *medkit = collectible_new(game, window, 'h');
+medkit->health = 50;
+medkit->item.single_use = true;
+
+// Add to character inventory
+character->inventory[0] = (t_item *)pistol;
+character->inventory[1] = (t_item *)medkit;
+
+// Use item
+if (character->inventory[character->inventory_index])
+{
+    t_item *item = character->inventory[character->inventory_index];
+    if (item->use)
+        item->use(item, NULL);
+}
+
+// Drop item
+if (item->drop)
+    item->drop(game, window, item, character);
+```
+
+## See Also
+
+- [Characters](/api/characters) - Inventory management
+- [Billboards](/api/billboards) - Drop entities

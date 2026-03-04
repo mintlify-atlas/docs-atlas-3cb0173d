@@ -1,0 +1,429 @@
+---
+title: "Architecture Overview"
+description: "Technical architecture, module structure, threading model, and data flow in Cub3D"
+---
+
+## System Architecture
+
+Cub3D is a Wolf3D-style raycasting game engine built in C with SDL2. The architecture follows a modular design with clear separation of concerns across rendering, entity management, input handling, and game logic.
+
+### High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                     Main Loop (loop.c)                   │
+│  - Event Processing (key_hook, mouse_hook)              │
+│  - Frame Updates (call_entity_frames)                   │
+│  - Rendering Pipeline (render_players_game)             │
+└─────────────────────────────────────────────────────────┘
+                            │
+        ┌───────────────────┴───────────────────┐
+        │                                       │
+┌───────▼────────┐                     ┌───────▼────────┐
+│   Game State   │                     │  Window/MLX    │
+│   (t_game)     │◄────────────────────┤  (t_ftm_window)│
+└───────┬────────┘                     └────────────────┘
+        │
+        ├─────► Entities System (t_list *entities)
+        ├─────► Map System (t_map)
+        ├─────► Render System (HUD, Camera, Sprites)
+        ├─────► Audio System (t_hashmap *sounds)
+        └─────► Threading (camera_threads[4])
+```
+
+## Module Structure
+
+### Core Modules
+
+<AccordionGroup>
+  <Accordion title="ft_utils - Utility Functions">
+    Location: `src/ft_utils/`
+    
+    Provides fundamental data structures and utilities:
+    - **Hashmap**: Key-value storage for sprites, fonts, sounds
+    - **Linked Lists**: Dynamic entity management
+    - **Time Utilities**: Delta time, FPS tracking
+    - **Math Utilities**: Vector operations, angle calculations
+    - **String Operations**: Parsing, manipulation
+    
+    Key types:
+    ```c
+    typedef struct s_coords {
+        double x;
+        double y;
+        double yaw;  // Rotation angle
+    } t_coords;
+    
+    typedef struct s_hashmap {
+        t_element *table;
+    } t_hashmap;
+    
+    typedef struct s_list {
+        void *data;
+        struct s_list *next;
+    } t_list;
+    ```
+  </Accordion>
+
+  <Accordion title="ft_mlx_utils - Graphics & Window Management">
+    Location: `src/ft_mlx_utils/`
+    
+    SDL2 wrapper providing:
+    - **Window Management**: Creation, event handling, rendering
+    - **Image Operations**: Loading, manipulation, pixel operations
+    - **Text Rendering**: Bitmap font support
+    - **Input Controllers**: Keyboard, mouse, gamepad
+    
+    Subdirectories:
+    - `window/`: Window lifecycle management
+    - `image/`: Image loading and manipulation
+    - `text/`: Font rendering (IBM VGA 8x16)
+    - `controllers/`: Input handling
+  </Accordion>
+
+  <Accordion title="ft_audio - Audio System">
+    Location: `src/ft_audio/`
+    
+    Audio playback using miniaudio library:
+    - Sound effect management
+    - Background music
+    - 3D positional audio support
+    - Audio resource loading/cleanup
+  </Accordion>
+
+  <Accordion title="ft_threads - Threading System">
+    Location: `src/ft_threads/`
+    
+    Pthread wrapper for parallel processing:
+    ```c
+    typedef struct s_ftt_thread {
+        pthread_t thread;
+        bool running;
+        bool active;
+        void (*routine)(void *);
+        void *data;
+    } t_ftt_thread;
+    ```
+    
+    Used primarily for parallel raycasting across CPU cores.
+  </Accordion>
+
+  <Accordion title="Entities System">
+    Location: `src/utils/entities/`
+    
+    Entity Component System managing all game objects:
+    - `entity/`: Base entity implementation
+    - `billboard/`: Sprite-based entities
+    - `character/`: Living entities with health/inventory
+    - `player/`: Player-controlled characters
+    - `wall/`: Static wall entities
+    - `door/`: Interactive door entities
+    - `elevator/`: Map transition entities
+    - `drop/`: Item drops in the world
+    - `controller/`: AI and player controllers
+  </Accordion>
+
+  <Accordion title="Items System">
+    Location: `src/utils/items/`
+    
+    Item and inventory management:
+    - `item/`: Base item implementation
+    - `weapon/`: Weapons with damage/range
+    - `collectible/`: Health/ammo/score pickups
+  </Accordion>
+
+  <Accordion title="Render System">
+    Location: `src/utils/render/`
+    
+    Raycasting and rendering pipeline:
+    - `camera/`: 3D raycasting engine
+      - `walls/`: Wall rendering
+      - `billboards/`: Sprite rendering
+    - `hud/`: Heads-up display
+      - `minimap/`: 2D map overlay
+      - `stats/`: Health/ammo/score display
+      - `debug/`: Debug information overlay
+  </Accordion>
+
+  <Accordion title="Map System">
+    Location: `src/utils/map/`
+    
+    Map parsing and representation:
+    - `.cub` file parser
+    - Entity type mapping
+    - Map validation
+    - Dynamic map loading
+  </Accordion>
+
+  <Accordion title="Game Loop">
+    Location: `src/utils/loop/`
+    
+    Main game loop coordination:
+    - Event processing
+    - Frame timing
+    - Entity updates
+    - Rendering orchestration
+  </Accordion>
+
+  <Accordion title="Sprite System">
+    Location: `src/utils/sprites/`
+    
+    Sprite and animation management:
+    - Sprite loading/caching
+    - Animation state machine
+    - Directional sprites (8-way)
+  </Accordion>
+</AccordionGroup>
+
+## Threading Model
+
+### Parallel Raycasting
+
+Cub3D uses **4 parallel threads** for raycasting to maximize performance:
+
+```c
+// headers/cub3d.h:96
+#define CAMERA_THREADS 4
+
+// Game structure contains thread pool
+struct s_game {
+    // ...
+    t_ftt_thread *camera_threads[CAMERA_THREADS];
+};
+```
+
+### Thread Distribution
+
+Each thread renders a vertical slice of the screen:
+
+```c
+typedef struct s_raycasting_slice {
+    t_ftm_image *canvas;      // Target render surface
+    t_player *player;          // Player viewport
+    int starting_index;        // First column to render
+    int ending_index;          // Last column to render
+} t_raycasting_slice;
+```
+
+**Example**: For a 1024px wide screen with 4 threads:
+- Thread 0: columns 0-255
+- Thread 1: columns 256-511
+- Thread 2: columns 512-767
+- Thread 3: columns 768-1023
+
+### Synchronization
+
+The main game state is protected by a mutex:
+
+```c
+struct s_cub3d {
+    pthread_mutex_t game_mutex;  // Protects game state
+    t_game *game;                // Shared game state
+    // ...
+};
+```
+
+<Warning>
+  Thread safety is critical when accessing shared game state. Always acquire the `game_mutex` before modifying entities, maps, or other shared resources.
+</Warning>
+
+## Data Flow
+
+### Frame Update Cycle
+
+```mermaid
+sequenceDiagram
+    participant Loop as Main Loop
+    participant Input as Input System
+    participant Entities as Entity System
+    participant Render as Render System
+    participant Display as Window/Display
+    
+    Loop->>Input: Process Events (key_hook, mouse_hook)
+    Input->>Entities: Update Controllers
+    Loop->>Entities: call_entity_frames(delta_time)
+    Entities->>Entities: Update Physics, AI, Animation
+    Loop->>Render: render_players_game()
+    Render->>Render: Parallel Raycasting (4 threads)
+    Render->>Render: Render HUD
+    Render->>Display: Present Frame
+    Loop->>Loop: Sleep to maintain FPS limit
+```
+
+### Entity Update Flow
+
+```c
+void call_entity_frames(t_game *game, t_fps *fps)
+{
+    t_list *current = game->entities;
+    
+    while (current) {
+        t_entity *entity = (t_entity *)current->data;
+        
+        if (entity->active && entity->frame) {
+            // Call entity-specific frame update
+            entity->frame(game, entity, fps->delta_time);
+        }
+        
+        current = current->next;
+    }
+}
+```
+
+Each entity type has its own `frame()` implementation:
+- **Player**: Process input, move, update camera
+- **Character**: AI decision making, weapon usage
+- **Door**: Animation state, auto-close timer
+- **Billboard**: Sprite animation updates
+- **Drop**: Item pickup detection
+
+### Rendering Pipeline
+
+<Steps>
+  <Step title="Clear Canvas">
+    Fill background with floor/ceiling colors from environment.
+  </Step>
+  
+  <Step title="Raycast Walls" icon="cube">
+    For each screen column (parallelized across 4 threads):
+    1. Cast ray from player position
+    2. Find wall intersection
+    3. Calculate wall height on screen
+    4. Sample texture and draw vertical strip
+  </Step>
+  
+  <Step title="Render Billboards" icon="image">
+    1. Sort billboards by distance (painter's algorithm)
+    2. For each billboard:
+       - Project 3D position to screen space
+       - Draw sprite with depth-based scaling
+       - Apply transparency
+  </Step>
+  
+  <Step title="Render HUD" icon="eye">
+    Draw UI elements on top of 3D view:
+    - Stats (health, ammo, score)
+    - Minimap
+    - Debug info (FPS, position)
+    - Action prompts
+  </Step>
+  
+  <Step title="Present Frame" icon="desktop">
+    Flip buffers and display completed frame to screen.
+  </Step>
+</Steps>
+
+## Memory Management
+
+### Resource Lifecycle
+
+<CodeGroup>
+
+```c Entity Initialization
+// Entity creation pattern
+t_player *player_new(t_game *game, t_ftm_window *window, char identifier)
+{
+    t_player *player = malloc(sizeof(t_player));
+    if (!player)
+        return (NULL);
+    
+    init_player(game, window, player, identifier);
+    return (player);
+}
+```
+
+```c Entity Cleanup
+// Two-phase cleanup: clear (release resources), then free (deallocate)
+void free_entity(void *data)
+{
+    t_entity *entity = (t_entity *)data;
+    
+    if (entity->clear)
+        entity->clear(entity);  // Release resources
+    
+    free(entity);  // Deallocate memory
+}
+```
+
+```c Game Cleanup
+void free_game(void *game)
+{
+    t_game *g = (t_game *)game;
+    
+    kill_threads(g);              // Stop all threads
+    ft_lstclear(&g->entities, free_entity);  // Clean all entities
+    free_walls(g);                // Free wall matrix
+    hashmap_clear(g->sprites);    // Free sprite cache
+    hashmap_clear(g->sounds);     // Free audio resources
+    free_map(g->map);             // Free map data
+    free(g);
+}
+```
+
+</CodeGroup>
+
+### Hashmap Usage
+
+Hashmaps provide O(1) resource lookup:
+
+<ParamField path="game->sprites" type="t_hashmap*">
+  2D sprite cache (icons, UI elements)
+</ParamField>
+
+<ParamField path="game->sprites_3d" type="t_hashmap*">
+  3D directional sprites (8-way character sprites)
+</ParamField>
+
+<ParamField path="game->sounds" type="t_hashmap*">
+  Audio clip cache
+</ParamField>
+
+<ParamField path="game->fonts" type="t_hashmap*">
+  Loaded font resources
+</ParamField>
+
+<ParamField path="map->identifiers" type="t_hashmap*">
+  Entity type constructors keyed by map character
+</ParamField>
+
+## Performance Characteristics
+
+### FPS Management
+
+```c
+struct s_fps {
+    t_time beginning;           // Game start time
+    t_time fps_update_time;     // Last FPS calculation
+    t_time last_frame_time;     // Previous frame timestamp
+    double delta_time;          // Seconds since last frame
+    int fps_limit;              // Target FPS (1000 default)
+    int frame_count;            // Frames this second
+    int fps;                    // Current FPS
+    int max;                    // Peak FPS
+    int min;                    // Lowest FPS
+};
+```
+
+<Card title="Frame Time" icon="clock">
+  Delta time starts at 0.016s (62.5 FPS) and dynamically adjusts based on actual frame timing for consistent physics.
+</Card>
+
+### Raycasting Optimization
+
+<ParamField path="PLAYER_RAY_SUBRAYS" type="int" default="5">
+  Number of sub-rays cast per screen column for anti-aliasing and hit detection accuracy.
+</ParamField>
+
+<ParamField path="PLAYER_RAY_HIT_ENTITIES_NUMBER" type="int" default="5">
+  Maximum entities tracked per ray for shooting/interaction.
+</ParamField>
+
+<ParamField path="PLAYER_RAYS_NO_HIT_LENGTH" type="double" default="50.0">
+  Maximum ray distance when no wall is hit (prevents infinite rays).
+</ParamField>
+
+## See Also
+
+- [Configuration Reference](/reference/configuration) - All configurable constants
+- [Entities API](/reference/entities-api) - Entity system details
+- [Items & Weapons](/reference/items-weapons) - Item system reference

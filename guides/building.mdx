@@ -1,0 +1,323 @@
+---
+title: Building Cub3D
+description: Learn how to build Cub3D on Linux and macOS with all dependencies
+icon: hammer
+---
+
+## Overview
+
+Cub3D can be built natively on Linux and macOS systems. The build process compiles SDL2 from source and sets up all necessary dependencies automatically.
+
+## Prerequisites
+
+### Required Tools
+
+<CardGroup cols={2}>
+  <Card title="C Compiler" icon="code">
+    GCC or Clang compiler with C99 support
+  </Card>
+  <Card title="Build Tools" icon="wrench">
+    GNU Make and standard build utilities
+  </Card>
+  <Card title="ImageMagick" icon="image">
+    For font generation (optional: can use Docker fallback)
+  </Card>
+  <Card title="SDL2 Build Dependencies" icon="box">
+    System libraries for SDL2 compilation
+  </Card>
+</CardGroup>
+
+### Platform-Specific Dependencies
+
+<Tabs>
+  <Tab title="Linux">
+    Install development packages for SDL2 compilation:
+
+    ```bash Ubuntu/Debian
+    sudo apt-get update
+    sudo apt-get install build-essential libsdl2-dev libpthread-stubs0-dev
+    ```
+
+    ```bash Fedora/RHEL
+    sudo dnf install gcc make SDL2-devel
+    ```
+
+    ```bash Arch Linux
+    sudo pacman -S base-devel sdl2
+    ```
+  </Tab>
+  <Tab title="macOS">
+    Install Xcode Command Line Tools:
+
+    ```bash
+    xcode-select --install
+    ```
+
+    The Makefile automatically links required macOS frameworks:
+    - OpenGL
+    - AppKit
+    - CoreAudio
+    - AudioToolbox
+    - CoreHaptics
+    - GameController
+    - And more...
+  </Tab>
+</Tabs>
+
+## Building the Project
+
+### Standard Build
+
+The default build process handles all dependencies:
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone <repository-url>
+    cd cub3d
+    ```
+  </Step>
+
+  <Step title="Run make">
+    ```bash
+    make
+    ```
+
+    This command will:
+    1. Extract and compile SDL2 from bundled source (lib/SDL2-2.32.8.tar.gz)
+    2. Extract miniaudio header from lib/miniaudio.tar.gz
+    3. Generate font assets from TTF files
+    4. Decrypt and extract Wolf3D assets
+    5. Compile all source files
+    6. Link the final executable
+  </Step>
+
+  <Step title="Run the game">
+    ```bash
+    ./cub3d maps/hub.cub
+    ```
+  </Step>
+</Steps>
+
+### Build Output
+
+Successful compilation produces:
+
+- **cub3d** - Main executable
+- **obj/** - Compiled object files
+- **lib/libSDL2.a** - Static SDL2 library
+- **headers/SDL2/** - SDL2 headers
+- **headers/miniaudio.h** - Audio library header
+- **assets/fonts/** - Generated font bitmap files
+- **assets/wolf3d/** - Decrypted game assets
+
+## Makefile Targets
+
+### Primary Targets
+
+<CodeGroup>
+```bash Build Everything
+make
+# or explicitly:
+make all
+```
+
+```bash Development Build
+make dev
+# Builds and runs with maps/hub.cub
+```
+
+```bash Clean Dev Build
+make cdev
+# Cleans everything except ft_audio objects, then builds and runs
+```
+
+```bash Run All Maps
+make run
+# Cleans, builds, and runs the game with each .cub file in maps/
+```
+</CodeGroup>
+
+### Debugging Targets
+
+<CodeGroup>
+```bash Valgrind
+make val
+# Runs with memory leak detection and file descriptor tracking
+```
+
+```bash LLDB Debugger
+make lldb
+# Launches the game in LLDB debugger (macOS)
+```
+</CodeGroup>
+
+### Cleaning Targets
+
+<CodeGroup>
+```bash Clean Objects
+make clean
+# Removes obj/ directory
+```
+
+```bash Full Clean
+make fclean
+# Removes executable, libraries, and generated headers
+```
+
+```bash Rebuild
+make re
+# Equivalent to: make fclean && make
+```
+</CodeGroup>
+
+### Asset Targets
+
+<CodeGroup>
+```bash Font Generation
+make fonts
+# Regenerates font bitmaps from TTF files using ImageMagick
+```
+
+```bash Update Wolf3D Assets
+make update-wolf3d-assets
+# Re-encrypts assets/wolf3d/ directory into assets/wolf3d-assets.zip
+```
+</CodeGroup>
+
+## Compiler Flags
+
+The build uses these compiler flags:
+
+```makefile
+CFLAGS = -Wall -Wextra -Werror -O3 -g
+```
+
+- **-Wall -Wextra -Werror**: Strict warnings as errors
+- **-O3**: Maximum optimization
+- **-g**: Debug symbols
+
+<Tip>
+  For address sanitizer debugging, uncomment the alternative CFLAGS line in the Makefile:
+  ```makefile
+  CFLAGS = -Wall -Wextra -Werror -O3 -g -std=c99 -fsanitize=address -fno-omit-frame-pointer
+  ```
+</Tip>
+
+## Platform Detection
+
+The Makefile automatically detects your platform:
+
+```makefile
+UNAME_S = $(shell uname -s)
+```
+
+- **Darwin (macOS)**: Links Apple frameworks
+- **Linux**: Adjusts compiler warnings based on GCC vs Clang
+
+## Library Dependencies
+
+### SDL2
+
+SDL2 is compiled from source (version 2.32.8) with:
+
+```bash
+./configure --disable-shared --enable-static
+make
+```
+
+This produces a static library that's linked into the executable.
+
+### miniaudio
+
+The miniaudio single-header library provides audio functionality:
+
+- Extracted from: lib/miniaudio.tar.gz
+- Placed in: headers/miniaudio.h
+
+### System Libraries
+
+```makefile
+LDLIBS = -lSDL2 -ldl -lpthread
+```
+
+- **libSDL2**: Graphics and input
+- **libdl**: Dynamic linking
+- **libpthread**: Threading support
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="SDL2 compilation fails">
+    Ensure you have development headers installed:
+
+    ```bash Linux
+    sudo apt-get install libx11-dev libxext-dev libxrandr-dev libxcursor-dev \
+                         libxinerama-dev libxi-dev libxss-dev libxxf86vm-dev \
+                         libasound2-dev libpulse-dev libudev-dev
+    ```
+
+    On macOS, ensure Xcode Command Line Tools are installed:
+    ```bash
+    xcode-select --install
+    ```
+  </Accordion>
+
+  <Accordion title="Font generation fails">
+    The fonts.sh script requires ImageMagick. Install it:
+
+    ```bash Linux
+    sudo apt-get install imagemagick
+    ```
+
+    ```bash macOS
+    brew install imagemagick
+    ```
+
+    Or let the script use Docker as a fallback.
+  </Accordion>
+
+  <Accordion title="Permission denied errors">
+    Make sure scripts have execute permissions:
+
+    ```bash
+    chmod +x scripts/fonts.sh
+    ```
+  </Accordion>
+
+  <Accordion title="Linker errors on macOS">
+    If you see framework linking errors, update Xcode:
+
+    ```bash
+    softwareupdate --install -a
+    xcode-select --install
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Build Performance
+
+<Note>
+  First build takes longer (3-5 minutes) due to SDL2 compilation. Subsequent builds are much faster since SDL2 is cached.
+</Note>
+
+### Speeding Up Builds
+
+The Makefile supports parallel compilation:
+
+```bash
+make -j$(nproc)
+```
+
+Use `make cdev` instead of `make clean dev` to preserve compiled audio objects.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Creating Maps" icon="map" href="/guides/creating-maps">
+    Learn how to create custom .cub maps
+  </Card>
+  <Card title="Controls" icon="gamepad" href="/guides/controls">
+    Understand keyboard, mouse, and gamepad controls
+  </Card>
+</CardGroup>

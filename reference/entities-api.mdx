@@ -1,0 +1,589 @@
+---
+title: "Entities API Reference"
+description: "Technical reference for the entity system, entity types, and entity management"
+---
+
+## Entity System Overview
+
+The entity system is the core game object architecture in Cub3D. All interactive objects (players, enemies, walls, doors, items) inherit from the base `t_entity` structure.
+
+## Entity Type Hierarchy
+
+```
+t_entity (base)
+├── t_wall
+│   ├── t_door
+│   └── t_elevator
+├── t_billboard
+│   ├── t_character
+│   │   └── t_player
+│   └── t_drop
+└── (other specialized types)
+```
+
+## Entity Type Enumeration
+
+```c
+enum e_entity_type {
+    ENTITY,            // Base entity
+    ENTITY_PLAYER,     // Player-controlled character
+    ENTITY_WALL,       // Static wall
+    ENTITY_DOOR,       // Interactive door
+    ENTITY_BILLBOARD,  // Sprite-based entity
+    ENTITY_DROP,       // Item drop
+    ENTITY_CHARACTER,  // NPC character
+    ENTITY_ELEVATOR    // Map transition
+};
+```
+
+## Core Structures
+
+### Base Entity
+
+The foundational entity structure all types inherit from.
+
+```c
+struct s_entity {
+    // Lifecycle methods
+    void (*frame)(t_game *game, t_entity *entity, double delta_time);
+    void (*clear)(void *this);
+    
+    // Interaction methods
+    void (*action)(t_entity *entity, t_character *actioner);
+    void (*shot)(t_entity *shooted, t_character *shooter);
+    
+    // Controller (for AI/player input)
+    t_controller controller;
+    
+    // Rendering flags
+    bool targetable;                  // Can be targeted by raycasts
+    bool transparent;                 // Rays pass through
+    bool ultra_mega_transparent;      // Completely invisible to rays
+    bool no_transparency_for_bill;    // Opaque for billboard rendering
+    
+    // Health system
+    int max_health;
+    int health;
+    bool invencible;
+    
+    // Physical properties
+    bool hard;           // Solid collision
+    bool wall;           // Is a wall entity
+    bool actionable;     // Can be interacted with (E key)
+    bool billboard;      // Is a billboard sprite
+    bool character;      // Is a living character
+    
+    // Identity
+    char identifier;     // Map character representing this entity
+    bool active;         // Currently active in game
+    
+    // Transform
+    t_coords coords;     // Position (x, y) and rotation (yaw)
+    t_dsize size;        // Width and height
+    
+    // Type information
+    t_entity_type type;
+    
+    // Audio
+    t_fta_audio *collision_sound;
+};
+```
+
+<ParamField path="frame" type="function">
+  Called every frame to update entity state.
+  
+  **Signature**: `void (*frame)(t_game *game, t_entity *entity, double delta_time)`
+  
+  - `game`: Global game state
+  - `entity`: This entity
+  - `delta_time`: Seconds since last frame
+</ParamField>
+
+<ParamField path="clear" type="function">
+  Cleanup function to release resources before deallocation.
+  
+  **Signature**: `void (*clear)(void *this)`
+</ParamField>
+
+<ParamField path="action" type="function">
+  Called when a character interacts with this entity (E key).
+  
+  **Signature**: `void (*action)(t_entity *entity, t_character *actioner)`
+  
+  <Tip>Used for opening doors, picking up items, activating switches.</Tip>
+</ParamField>
+
+<ParamField path="shot" type="function">
+  Called when this entity is hit by a weapon.
+  
+  **Signature**: `void (*shot)(t_entity *shooted, t_character *shooter)`
+</ParamField>
+
+### Controller
+
+Handles AI and player input for entities.
+
+```c
+struct s_controller {
+    // Control methods
+    void (*key)(t_game *game, t_entity *entity, t_ftm_key_hook_values);
+    void (*frame)(t_game *game, t_entity *entity, double delta_time);
+    
+    // AI state
+    t_time last_shot;
+    t_time last_strafe;
+    t_time last_seen_target;
+    t_coords last_target_position;
+    t_entity *prev_target;
+    int prev_key;
+    double prev_angle;
+    double moving_to_angle;
+    double time_accumulator;
+    double optimal_proximity;  // Preferred distance from target
+    
+    // Movement state
+    bool walking_forward;
+    bool walking_left;
+    bool walking_backward;
+    bool walking_right;
+    bool looking_right;
+    bool looking_left;
+    bool sprinting;
+    bool action;              // E key pressed
+    bool keyboard_only;       // Disable mouse input
+    bool already_actioned;    // Action handled this frame
+    
+    // Look/movement parameters
+    double mouse_moviment;
+    double mouse_look_velocity;
+    double key_look_velocity;
+    double walk_velocity;
+    double sprint_velocity;
+};
+```
+
+<AccordionGroup>
+  <Accordion title="AI Controller Example">
+    ```c
+    void enemy_ai_frame(t_game *game, t_entity *entity, double delta_time) {
+        t_controller *ctrl = &entity->controller;
+        
+        // Find player target
+        t_entity *target = find_nearest_player(game, entity);
+        
+        if (target) {
+            // Calculate angle to target
+            double angle = atan2(
+                target->coords.y - entity->coords.y,
+                target->coords.x - entity->coords.x
+            );
+            
+            // Rotate towards target
+            ctrl->moving_to_angle = angle;
+            
+            // Move forward
+            ctrl->walking_forward = true;
+            
+            // Shoot if close enough
+            if (distance_to(entity, target) < 5.0) {
+                shoot_weapon(entity);
+            }
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Player Controller Example">
+    ```c
+    void player_controller_key(t_game *game, t_entity *entity, 
+                               t_ftm_key_hook_values key) {
+        t_controller *ctrl = &entity->controller;
+        
+        // Handle movement keys
+        if (key.key == 'w')
+            ctrl->walking_forward = key.pressed;
+        if (key.key == 'a')
+            ctrl->walking_left = key.pressed;
+        if (key.key == 's')
+            ctrl->walking_backward = key.pressed;
+        if (key.key == 'd')
+            ctrl->walking_right = key.pressed;
+        
+        // Sprint
+        if (key.key == K_SHIFT)
+            ctrl->sprinting = key.pressed;
+        
+        // Action
+        if (key.key == 'e')
+            ctrl->action = key.pressed;
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Entity Types
+
+### Billboard
+
+Sprite-based entities rendered as flat images facing the camera.
+
+```c
+struct s_billboard {
+    t_entity entity;        // Inherits from entity
+    bool y_centered;        // Center sprite vertically
+    t_sprite **sprites;     // 8-directional sprites (N, NE, E, SE, S, SW, W, NW)
+};
+```
+
+**Constructor**: `t_billboard *billboard_new(t_game *game, t_ftm_window *window, char identifier)`
+
+<Info>
+  Sprites are directional - the appropriate sprite is selected based on the camera's viewing angle.
+</Info>
+
+### Character
+
+Living entities with health, inventory, and AI.
+
+```c
+struct s_character {
+    t_billboard billboard;  // Inherits from billboard
+    
+    // Animation sprites
+    t_sprite **using_sprite;    // Weapon usage animation
+    t_sprite **death_sprite;    // Death animation
+    t_sprite **hit_sprite;      // Taking damage animation
+    t_sprite **walking_sprite;  // Walking animation
+    t_sprite **_sprite;         // Base sprite reference
+    
+    // Timing
+    t_time last_hit;
+    t_time last_use;            // Last weapon use
+    t_time last_auto_use;       // Last auto-fire
+    
+    // Audio
+    t_fta_audio *hit_sound;
+    t_fta_audio *death_sound;
+    
+    // Targeting
+    t_entity *target_entity;              // Current target
+    t_character *last_hit_by_character;   // For revenge AI
+    t_direction target_entity_direction;  // Direction to target
+    
+    // Inventory
+    t_time last_inventory_scroll;
+    bool cheating;                    // God mode / infinite ammo
+    t_item *inventory[INVENTORY_SIZE];
+    t_drop *drop;                     // Associated item drop
+    bool drop_items;                  // Drop items on death
+    int inventory_index;              // Selected slot (0-8)
+    char last_used_item_identifier;
+    
+    // Camera (for players)
+    double fov;
+    int rays;                         // Ray count (screen width)
+    
+    // Resources
+    int ammo;
+    int score;
+    
+    // Death state
+    t_time died_at;
+    bool was_already_dead;
+    bool dead;
+};
+```
+
+**Constructor**: `t_character *character_new(t_game *game, t_ftm_window *window, char identifier)`
+
+<ParamField path="inventory[INVENTORY_SIZE]" type="t_item*[]">
+  Array of item pointers. `NULL` entries represent empty slots.
+  
+  ```c
+  // Add item to first empty slot
+  for (int i = 0; i < INVENTORY_SIZE; i++) {
+      if (character->inventory[i] == NULL) {
+          character->inventory[i] = item;
+          break;
+      }
+  }
+  ```
+</ParamField>
+
+<ParamField path="target_entity" type="t_entity*">
+  Entity currently under the player's crosshair. Used for:
+  - Action prompts ("Press E to open")
+  - Weapon targeting
+  - Interaction detection
+</ParamField>
+
+### Player
+
+Player-controlled character with split-screen support.
+
+```c
+struct s_player {
+    t_character character;      // Inherits from character
+    t_ftm_image *canvas;        // Player's viewport canvas
+    t_coords last_canvas_pos;   // For split-screen layout
+    int controller_id;          // Controller index (0-3)
+    bool friendly_fire;         // Can damage other players
+};
+```
+
+**Constructor**: `t_player *player_new(t_game *game, t_ftm_window *window, char identifier)`
+
+<Tip>
+  Up to 4 players supported simultaneously. Each has an independent viewport rendered to `canvas`.
+</Tip>
+
+### Wall
+
+Static wall entities with directional textures.
+
+```c
+struct s_wall {
+    t_entity entity;         // Inherits from entity
+    t_sprite *north_sprite;  // Texture for north-facing side
+    t_sprite *south_sprite;  // Texture for south-facing side
+    t_sprite *west_sprite;   // Texture for west-facing side
+    t_sprite *east_sprite;   // Texture for east-facing side
+};
+```
+
+**Constructor**: `t_wall *wall_new(t_game *game, t_ftm_window *window, char identifier)`
+
+<Info>
+  The appropriate sprite is selected based on which side the ray hits.
+</Info>
+
+### Door
+
+Interactive door entities with animation.
+
+```c
+struct s_door {
+    t_wall wall;                // Inherits from wall
+    
+    t_direction direction;      // Door orientation (N/S/E/W)
+    
+    // Sprites
+    t_sprite *opening_sprite;   // Animation sequence
+    t_sprite *door_sprite;      // Closed state
+    t_sprite *door_sides_sprite; // Perpendicular sides
+    
+    // State
+    bool opened;
+    bool cant_close;            // Door stuck open
+    bool closeable;             // Can auto-close
+    t_time auto_close_delay;    // Milliseconds until auto-close
+    t_time last_opened_at;
+    
+    // Animation
+    int last_animation_index;   // Current frame
+    t_time animation_delay;     // Milliseconds per frame
+    int animation_frames;       // Total frames in sequence
+    
+    // Audio
+    t_fta_audio *open_sound;
+    t_fta_audio *close_sound;
+};
+```
+
+**Constructor**: `t_door *door_new_e(t_game *game, t_ftm_window *window, char identifier)`
+
+<AccordionGroup>
+  <Accordion title="Door Opening Sequence">
+    1. Player presses E near door
+    2. `door_action()` called
+    3. `opened = true`, `last_opened_at = current_time`
+    4. Each frame: advance `last_animation_index`
+    5. When animation complete: door fully open
+    6. After `auto_close_delay`: reverse animation, `opened = false`
+  </Accordion>
+  
+  <Accordion title="Door Transparency">
+    ```c
+    bool door_is_transparent_at(t_entity *entity, t_direction direction, double x) {
+        t_door *door = (t_door *)entity;
+        
+        if (!door->opened)
+            return false;  // Closed doors are solid
+        
+        // Check if ray hits door edge vs open area
+        double door_width = 0.1;  // Door thickness
+        if (x < door_width || x > (1.0 - door_width))
+            return false;  // Hit door frame
+        
+        return true;  // Ray passes through open area
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Elevator
+
+Special wall that transitions between maps.
+
+```c
+struct s_elevator {
+    t_wall wall;         // Inherits from wall
+    char *map_path;      // Path to destination map
+};
+```
+
+**Constructor**: `t_elevator *elevator_new(t_game *game, t_ftm_window *window, char identifier)`
+
+<Warning>
+  When a player activates an elevator, the entire game state is reloaded with the new map. All entities are destroyed and recreated.
+</Warning>
+
+### Drop
+
+Item pickups placed in the world.
+
+```c
+struct s_drop {
+    t_billboard billboard;   // Inherits from billboard
+    t_item *item;            // Item contained in this drop
+    t_item *prev_item;       // Previous item (for animation)
+    bool auto_use;           // Auto-activate on pickup
+    bool auto_pickup;        // Automatically pick up when touched
+};
+```
+
+**Constructor**: `t_drop *drop_new(t_game *game, t_ftm_window *window, char identifier)`
+
+<ParamField path="auto_pickup" type="bool">
+  When `true`, walking over the drop automatically adds it to inventory.
+  
+  When `false`, player must press E to pick up.
+</ParamField>
+
+<ParamField path="auto_use" type="bool">
+  When `true`, item is immediately used instead of being added to inventory (e.g., health packs).
+</ParamField>
+
+## Entity Management
+
+### Entity List
+
+All entities are stored in a linked list:
+
+```c
+struct s_game {
+    t_list *entities;  // Linked list of all active entities
+    // ...
+};
+```
+
+### Creating Entities
+
+```c
+// Create entity from map identifier
+t_type_creator creator = get_type_creator(game->map->identifiers, 'P');
+t_entity *entity = creator(game, window, 'P');
+
+// Add to entity list
+ft_lstadd_back(&game->entities, ft_lstnew(entity));
+```
+
+### Updating Entities
+
+```c
+void call_entity_frames(t_game *game, t_fps *fps) {
+    t_list *current = game->entities;
+    
+    while (current) {
+        t_entity *entity = (t_entity *)current->data;
+        
+        if (entity->active && entity->frame) {
+            entity->frame(game, entity, fps->delta_time);
+        }
+        
+        current = current->next;
+    }
+}
+```
+
+### Destroying Entities
+
+```c
+void free_entity(void *data) {
+    t_entity *entity = (t_entity *)data;
+    
+    // Call cleanup method
+    if (entity->clear)
+        entity->clear(entity);
+    
+    // Free memory
+    free(entity);
+}
+
+// Remove from list
+ft_lstclear(&game->entities, free_entity);
+```
+
+## Entity Factory Pattern
+
+Entities are created via factory functions registered in the map's identifier hashmap:
+
+```c
+typedef void *(*t_type_creator)(t_game *, t_ftm_window *, char);
+
+// Register entity constructors
+hashmap_insert(map->identifiers, "P", player_new);      // Player spawn
+hashmap_insert(map->identifiers, "D", door_new_e);      // Door
+hashmap_insert(map->identifiers, "E", elevator_new);    // Elevator
+hashmap_insert(map->identifiers, "C", character_new);   // NPC
+hashmap_insert(map->identifiers, "I", drop_new);        // Item drop
+```
+
+## Utility Functions
+
+### Entity Queries
+
+<CodeGroup>
+
+```c headers/cub3d.h:520-537
+// Entity creation functions
+t_player *player_new(t_game *game, t_ftm_window *window, char identifier);
+t_wall *wall_new(t_game *game, t_ftm_window *window, char identifier);
+t_door *door_new_e(t_game *game, t_ftm_window *window, char identifier);
+t_billboard *billboard_new(t_game *game, t_ftm_window *window, char identifier);
+t_entity *entity_new(t_game *game, t_ftm_window *window, char identifier);
+t_drop *drop_new(t_game *game, t_ftm_window *window, char identifier);
+t_character *character_new(t_game *game, t_ftm_window *window, char identifier);
+t_elevator *elevator_new(t_game *game, t_ftm_window *window, char identifier);
+```
+
+```c headers/cub3d.h:515-519
+// Entity lifecycle functions
+void free_entity(void *data);
+void call_entity_frames(t_game *game, t_fps *fps);
+void call_entity_keys(t_game *game, t_ftm_key_hook_values kvh);
+bool entity_x_is_transparent(t_entity *entity, t_direction direction, double x);
+```
+
+```c src/utils/entities/entities.h:18-29
+// Entity utility functions
+void init_controller(t_game *game, t_entity *entity, const char *type);
+void free_entity(void *entity);
+bool add_item_to_inventory(t_character *character, t_item *item);
+void free_3d_sprite(t_sprite **sprite_3d);
+void clear_3d_sprite(t_sprite **sprites);
+void fill_3d_sprites_from_game(t_game *game, t_sprite **dst, 
+                               char identifier, char *key);
+void fill_3d_sprites_from_src(t_sprite **dst, t_sprite **src);
+void fill_3d_sprites_from_single(t_sprite **dst, t_sprite *src);
+void reset_3d_sprites(t_sprite **sprites);
+bool door_is_transparent_at(t_entity *entity, t_direction direction, double x);
+```
+
+</CodeGroup>
+
+## See Also
+
+- [Configuration Reference](/reference/configuration) - Entity-related constants
+- [Items & Weapons](/reference/items-weapons) - Item system integrated with characters
+- [Architecture Overview](/reference/architecture) - Entity system design patterns

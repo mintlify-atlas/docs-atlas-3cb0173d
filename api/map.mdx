@@ -1,0 +1,262 @@
+---
+title: 'Map'
+description: 'Map parsing and management for loading .cub level files'
+---
+
+## Overview
+
+The map module handles parsing and managing .cub map files that define level layouts, entity placements, and configuration. Maps contain both the 2D grid layout and metadata like textures, colors, and entity definitions.
+
+## Functions
+
+### parse_map_e()
+
+Parses a .cub map file and returns a structured map object.
+
+```c
+t_map *parse_map_e(char *path);
+```
+
+<ParamField path="path" type="char *" required>
+  File path to the .cub map file to parse
+</ParamField>
+
+<ResponseField name="return" type="t_map *">
+  Pointer to the parsed map structure, or NULL on error
+</ResponseField>
+
+#### Parsing Process
+
+The function performs parsing in four stages:
+
+1. **Allocation & Validation** - Allocates map structure and validates .cub extension
+2. **Raw Reading** - Reads all lines from the file into `map->raw`
+3. **Processing** - Processes raw lines to extract map grid and metadata
+4. **Identifier Parsing** - Parses entity type definitions and configurations
+5. **Size Calculation** - Determines map dimensions
+
+If any stage fails, the function cleans up partial state and returns NULL.
+
+#### File Format Requirements
+
+- File must have `.cub` extension
+- File must be readable
+- Must contain valid map grid and configuration
+
+#### Usage Example
+
+```c
+// From loop.c - Loading a new map
+t_map *map = parse_map_e("maps/level1.cub");
+if (!map) {
+    // Handle parsing error
+    return;
+}
+
+// Use map to create game
+t_game *game = game_new_e(window, map);
+```
+
+<Note>
+  The map path is stored in the map structure for reference and potential reloading.
+</Note>
+
+---
+
+### clear_map()
+
+Clears all dynamically allocated data within a map structure without freeing the structure itself.
+
+```c
+void clear_map(void *map);
+```
+
+<ParamField path="map" type="void *" required>
+  Pointer to the map instance to clear (cast from t_map *)
+</ParamField>
+
+#### What Gets Cleared
+
+- `raw` - Array of raw file lines
+- `types` - Hashmap of entity type configurations
+- `identifiers` - Hashmap of entity identifier mappings
+- `path` - Stored file path string
+
+The `map` array itself is not freed as it may point into the `raw` array.
+
+<Note>
+  This function is safe to call with NULL. It checks for NULL before proceeding.
+</Note>
+
+---
+
+### free_map()
+
+Completely frees a map instance including the structure itself.
+
+```c
+void free_map(t_map *map);
+```
+
+<ParamField path="map" type="t_map *" required>
+  Pointer to the map instance to free
+</ParamField>
+
+#### Usage Example
+
+```c
+// From loop.c - Cleaning up before loading new map
+free_map(cub3d()->curr_map);
+cub3d()->curr_map = NULL;
+```
+
+---
+
+## Map Structure
+
+### t_map
+
+Contains all parsed map data and configuration.
+
+```c
+struct s_map
+{
+    char        *path;          // Path to the .cub file
+    t_hashmap   *types;         // Entity type configurations
+    char        **raw;          // Raw file lines
+    char        **map;          // Processed 2D map grid
+    t_size      size;           // Map dimensions (width, height)
+    t_hashmap   *identifiers;   // Entity identifier -> creator mappings
+};
+```
+
+<ParamField path="path" type="char *">
+  The file path to the original .cub file
+</ParamField>
+
+<ParamField path="types" type="t_hashmap *">
+  Hashmap storing entity type configurations. Keys are entity identifiers, values are configuration strings.
+  
+  Example configurations:
+  - `TARGETABLE`: "TRUE" or "FALSE"
+  - `TRANSPARENT`: "TRUE" or "FALSE"
+  - `MAX_HEALTH`: Numeric string
+  - `CONTROLLER`: Controller type name
+</ParamField>
+
+<ParamField path="raw" type="char **">
+  Null-terminated array of strings containing the raw file contents, one line per element
+</ParamField>
+
+<ParamField path="map" type="char **">
+  Null-terminated array of strings representing the processed 2D map grid. Each character represents a tile type or entity.
+</ParamField>
+
+<ParamField path="size" type="t_size">
+  The dimensions of the map grid (width and height in tiles)
+</ParamField>
+
+<ParamField path="identifiers" type="t_hashmap *">
+  Hashmap mapping entity identifier characters to their creator functions (t_type_creator). Used during entity spawning.
+</ParamField>
+
+---
+
+## Map Configuration
+
+### Default Map Types
+
+Defined in cub3d.h:
+
+```c
+#define DEFAULT_MAP_PATH "maps/hub.cub"
+#define DEFAULT_AIR_TYPES "0 \t\n\v\f\r"
+#define DEFAULT_WALL_TYPES "1"
+#define DEFAULT_PLAYER_TYPES "NSEW"
+```
+
+<ParamField path="DEFAULT_AIR_TYPES" type="string">
+  Characters that represent walkable/empty space
+</ParamField>
+
+<ParamField path="DEFAULT_WALL_TYPES" type="string">
+  Characters that represent solid walls
+</ParamField>
+
+<ParamField path="DEFAULT_PLAYER_TYPES" type="string">
+  Characters that represent player spawn points with initial facing direction:
+  - N: North
+  - S: South
+  - E: East
+  - W: West
+</ParamField>
+
+---
+
+## Usage Patterns
+
+### Loading and Switching Maps
+
+```c
+// Parse new map
+t_map *new_map = parse_map_e("maps/level2.cub");
+if (!new_map) {
+    fprintf(stderr, "Failed to load map\n");
+    return;
+}
+
+// Clean up old game and map
+free_game(current_game);
+free_map(current_map);
+
+// Create new game with new map
+current_game = game_new_e(window, new_map);
+current_map = new_map;
+```
+
+### Accessing Map Data
+
+```c
+// Get map dimensions
+int width = map->size.width;
+int height = map->size.height;
+
+// Access tile at position (x, y)
+if (y < height && x < ft_strlen(map->map[y])) {
+    char tile = map->map[y][x];
+    // Check tile type
+    if (ft_strchr(DEFAULT_WALL_TYPES, tile)) {
+        // It's a wall
+    }
+}
+
+// Get entity type configuration
+char *is_targetable = hashmap_get_with_identifier(
+    game, map->types, identifier, "TARGETABLE");
+```
+
+---
+
+## Error Handling
+
+All map functions use the error flagging system (fte):
+
+```c
+t_map *map = parse_map_e(path);
+if (!map) {
+    // Error details are set via fte_set()
+    // Common errors:
+    // - "map alloc" - Memory allocation failed
+    // - "invalid map" - Invalid file extension or path
+    // - "map open" - File couldn't be opened
+    // - "map read" - Reading file contents failed
+    return;
+}
+```
+
+---
+
+## See Also
+
+- [Game](/api/game) - Game instance creation and management
+- [Entities](/api/entities) - Entity system and spawning
